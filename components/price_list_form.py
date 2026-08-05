@@ -18,7 +18,7 @@ class PriceListForm(ft.Stack):
             content=ft.Text("Modal"),
             visible=False,
             bgcolor="#80000000",
-            expand=True,
+            left=0, right=0, top=0, bottom=0,
             alignment=ft.alignment.center,
         )
 
@@ -146,7 +146,7 @@ class PriceListForm(ft.Stack):
         # =============================================
         self.form_container = ft.Container(
             padding=10,
-            expand=True,
+            left=0, right=0, top=0, bottom=0,
             content=ft.Column(
                 controls=[
                     ft.Row([self.list_name, self.effective_date, self.price_type], spacing=12, wrap=True),

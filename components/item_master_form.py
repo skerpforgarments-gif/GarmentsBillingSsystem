@@ -78,7 +78,8 @@ class ItemMasterForm(ft.Stack):
         )
         self.sub_modal_overlay = ft.Container(
             content=self.sub_modal_box, bgcolor=ft.colors.with_opacity(0.5, "black"),
-            visible=False, expand=True, alignment=ft.alignment.center, on_click=lambda _: self.close_sub_modal()
+            visible=False, left=0, right=0, top=0, bottom=0,
+            alignment=ft.alignment.center, on_click=lambda _: self.close_sub_modal()
         )
 
         # 5. BUTTONS & HELPER FUNCTIONS
@@ -97,6 +98,7 @@ class ItemMasterForm(ft.Stack):
         # 6. ASSEMBLE MAIN CONTENT
         main_form = ft.Container(
             padding=15,
+            left=0, right=0, top=0, bottom=0,
             content=ft.Column(
                 controls=[
                     ft.Row([self.item_code, self.item_order], spacing=12),
@@ -161,13 +163,36 @@ class ItemMasterForm(ft.Stack):
             self.open_sub_modal("Add New Style", txt, save_new)
 
         def add_custom_size(e):
-            txt = ft.TextField(label="Size (e.g. S, 32, XL)", autofocus=True, on_submit=lambda _: save_new(None))
+            txt = ft.TextField(label="Size (e.g. S, 32, XL) or comma-separated", autofocus=True, on_submit=lambda _: save_new(None))
             def save_new(e):
-                val = txt.value.strip().upper()
-                if val and val not in self.size_checkboxes:
-                    cb = ft.Checkbox(label=val, value=True, on_change=self.on_size_change)
-                    self.size_checkboxes[val] = cb
-                    self._render_size_grid(); self.close_sub_modal(); self.rebuild_size_matrix()
+                raw_val = txt.value.strip().upper()
+                if not raw_val:
+                    txt.error_text = "Please enter a size"
+                    txt.update()
+                    return
+                
+                parts = [p.strip() for p in raw_val.split(",") if p.strip()]
+                import re
+                for val in parts:
+                    if len(val) > 10 or not re.match(r"^[A-Z0-9\-]+$", val):
+                        txt.error_text = f"Invalid size format: '{val}'. Use alphanumeric/hyphens."
+                        txt.update()
+                        return
+
+                added_any = False
+                for val in parts:
+                    if val not in self.size_checkboxes:
+                        cb = ft.Checkbox(label=val, value=True, on_change=self.on_size_change)
+                        self.size_checkboxes[val] = cb
+                        added_any = True
+                    elif not self.size_checkboxes[val].value:
+                        self.size_checkboxes[val].value = True
+                        added_any = True
+
+                if added_any:
+                    self._render_size_grid()
+                    self.rebuild_size_matrix()
+                self.close_sub_modal()
             self.open_sub_modal("Add Custom Size", txt, save_new)
 
         self.btn_add_brand.on_click = add_custom_brand

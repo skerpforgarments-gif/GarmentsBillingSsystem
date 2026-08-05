@@ -26,7 +26,7 @@ class PartyMasterForm(ft.Stack):
             content=ft.Text("Modal"),
             visible=False,
             bgcolor="#80000000", # Semi-transparent overlay
-            expand=True,
+            left=0, right=0, top=0, bottom=0,
             alignment=ft.alignment.center,
         )
         
@@ -204,7 +204,7 @@ class PartyMasterForm(ft.Stack):
         # --- Main Layout Container ---
         self.form_container = ft.Container(
             padding=8,
-            expand=True,
+            left=0, right=0, top=0, bottom=0,
             content=ft.Column(
                 scroll=ft.ScrollMode.AUTO,
                 expand=True,
