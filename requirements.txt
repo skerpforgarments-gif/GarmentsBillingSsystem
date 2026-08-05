@@ -1,0 +1,7 @@
+flet==0.22.0
+supabase
+python-dotenv
+websockets==15.0.1
+httpx==0.28.1
+reportlab
+num2words
