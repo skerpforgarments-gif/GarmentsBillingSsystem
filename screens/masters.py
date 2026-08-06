@@ -130,30 +130,8 @@ class PartyMasterForm(ft.Stack):
         self.all_taxes = []
 
         # --- Discounts ---
-        self.disc_trade = ft.TextField(label="Trade % (TD)", width=120, value="0",
+        self.discount_percent = ft.TextField(label="Discount %", width=120, value="0",
                                          keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.disc_scheme = ft.TextField(label="Scheme % (SPD)", width=120, value="0",
-                                          keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.disc_festival = ft.TextField(label="Festival %", width=120, value="0",
-                                           keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.disc_special = ft.TextField(label="Special % (SCD)", width=120, value="0",
-                                       keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.disc_cash = ft.TextField(label="Cash % (CD)", width=120, value="0",
-                                     keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-
-        # --- Discount Order ---
-        # Maps internal keys to human-readable labels and field references
-        self.DISCOUNT_META = {
-            "trade":    {"label": "Trade (TD)",       "field": self.disc_trade},
-            "scheme":   {"label": "Scheme (SPD)",     "field": self.disc_scheme},
-            "festival": {"label": "Festival",         "field": self.disc_festival},
-            "scd":      {"label": "Special (SCD)",    "field": self.disc_special},
-            "cd":       {"label": "Cash (CD)",        "field": self.disc_cash},
-        }
-        self.DEFAULT_DISCOUNT_ORDER = ["trade", "scheme", "festival", "scd", "cd"]
-        self._discount_order = list(self.DEFAULT_DISCOUNT_ORDER)
-        self.discount_order_display = ft.Row(spacing=6, wrap=True)
-        self._refresh_order_display()
 
         # --- Bank Details ---
         self.bank_name = ft.TextField(label="Bank Name", width=220, **self.style_args)
@@ -245,18 +223,8 @@ class PartyMasterForm(ft.Stack):
                             ], spacing=10, wrap=True),
                         ], spacing=10)
                     ]),
-                    section("Discount Structure (Calculated Sequentially)", [
-                        ft.Row([self.disc_trade, self.disc_scheme, self.disc_festival, self.disc_special, self.disc_cash], spacing=10, wrap=True),
-                        ft.Divider(height=1, color="#F1F5F9"),
-                        ft.Text("DISCOUNT APPLICATION ORDER", weight="bold", size=10, color=AppColors.PRIMARY, style=ft.TextStyle(letter_spacing=1.0)),
-                        ft.Text("Discounts are applied sequentially in this order (left → right).", size=11, color=AppColors.TEXT_SUB, italic=True),
-                        ft.Row([
-                            self.discount_order_display,
-                            ft.OutlinedButton("Change Order", icon=ft.icons.SWAP_VERT, on_click=self._open_order_picker,
-                                              style=ft.ButtonStyle(color=AppColors.PRIMARY, side=ft.BorderSide(1, AppColors.PRIMARY))),
-                            ft.TextButton("Reset to Default", icon=ft.icons.RESTART_ALT, on_click=self._reset_order,
-                                          style=ft.ButtonStyle(color=AppColors.TEXT_SUB)),
-                        ], spacing=15, vertical_alignment=ft.CrossAxisAlignment.CENTER, wrap=True),
+                    section("Discount", [
+                        ft.Row([self.discount_percent], spacing=10, wrap=True),
                     ]),
                     section("Bank Details", [
                         ft.Row([self.bank_name, self.bank_acc, self.bank_ifsc], spacing=10, wrap=True),
@@ -321,12 +289,7 @@ class PartyMasterForm(ft.Stack):
             "gst_percent": self.gst_percent.value or "0",
             "rate_percent": self.gst_percent.value or "0",
             "tcs_applicable": self.tcs_applicable.value,
-            "discount_trade": float(self.disc_trade.value or 0),
-            "discount_scheme": float(self.disc_scheme.value or 0),
-            "discount_festival": float(self.disc_festival.value or 0),
-            "discount_scd": float(self.disc_special.value or 0),
-            "discount_cd": float(self.disc_cash.value or 0),
-            "discount_order": json.dumps(self._discount_order),
+            "discount_percent": float(self.discount_percent.value or 0),
             "bank_name": self.bank_name.value or "",
             "bank_account_no": self.bank_acc.value or "",
             "bank_ifsc": self.bank_ifsc.value or "",
@@ -422,26 +385,7 @@ class PartyMasterForm(ft.Stack):
         self.cess_percent.value = str(data.get("cess_percent", 0))
         self.gst_percent.value = str(data.get("gst_percent") or data.get("rate_percent", 0))
         self.tcs_applicable.value = data.get("tcs_applicable", False)
-        self.disc_trade.value = str(data.get("discount_trade", 0))
-        self.disc_scheme.value = str(data.get("discount_scheme", 0))
-        self.disc_festival.value = str(data.get("discount_festival", 0))
-        self.disc_special.value = str(data.get("discount_scd", 0))
-        self.disc_cash.value = str(data.get("discount_cd", 0))
-        # Load discount order
-        raw_order = data.get("discount_order")
-        if raw_order:
-            if isinstance(raw_order, str):
-                try:
-                    self._discount_order = json.loads(raw_order)
-                except Exception:
-                    self._discount_order = list(self.DEFAULT_DISCOUNT_ORDER)
-            elif isinstance(raw_order, list):
-                self._discount_order = list(raw_order)
-            else:
-                self._discount_order = list(self.DEFAULT_DISCOUNT_ORDER)
-        else:
-            self._discount_order = list(self.DEFAULT_DISCOUNT_ORDER)
-        self._refresh_order_display()
+        self.discount_percent.value = str(data.get("discount_percent", 0))
         self.bank_name.value = data.get("bank_name", "")
         self.bank_acc.value = data.get("bank_account_no", "")
         self.bank_ifsc.value = data.get("bank_ifsc", "")
@@ -468,174 +412,6 @@ class PartyMasterForm(ft.Stack):
         self.name.error_text = None
         if self.on_submit:
             self.on_submit(self.get_values())
-
-    # ─── Discount Order Picker ────────────────────────────────
-    def _refresh_order_display(self):
-        """Rebuild the visual badges showing the current discount order."""
-        self.discount_order_display.controls = []
-        for idx, key in enumerate(self._discount_order):
-            meta = self.DISCOUNT_META.get(key, {})
-            label = meta.get("label", key)
-            self.discount_order_display.controls.append(
-                ft.Container(
-                    content=ft.Row([
-                        ft.Container(
-                            content=ft.Text(str(idx + 1), size=10, weight="bold", color=ft.colors.WHITE),
-                            bgcolor=AppColors.PRIMARY,
-                            border_radius=10,
-                            width=20, height=20,
-                            alignment=ft.alignment.center,
-                        ),
-                        ft.Text(label, size=12, weight="w500"),
-                    ], spacing=6, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                    bgcolor="#EEF2FF",
-                    border_radius=6,
-                    padding=ft.padding.symmetric(horizontal=10, vertical=6),
-                    border=ft.border.all(1, "#C7D2FE"),
-                )
-            )
-            if idx < len(self._discount_order) - 1:
-                self.discount_order_display.controls.append(
-                    ft.Icon(ft.icons.ARROW_FORWARD, size=14, color="#94A3B8")
-                )
-
-    def _reset_order(self, e):
-        """Reset the discount order to default."""
-        self._discount_order = list(self.DEFAULT_DISCOUNT_ORDER)
-        self._refresh_order_display()
-        try:
-            self.update()
-        except Exception:
-            pass
-
-    def _open_order_picker(self, e):
-        """Open a modal to let the user pick the discount application order step-by-step."""
-        pending = list(self.DEFAULT_DISCOUNT_ORDER)  # All 5 available initially
-        chosen = []  # Will be built up as user picks
-
-        chosen_col = ft.Column(spacing=8)
-        available_col = ft.Column(spacing=8)
-        instruction_text = ft.Text("Select discount #1 (applied first):", size=13, weight="w500", color=AppColors.PRIMARY)
-
-        def _rebuild_ui():
-            # Instruction
-            step = len(chosen) + 1
-            if step <= 5:
-                ordinal = ["1st", "2nd", "3rd", "4th", "5th"][step - 1]
-                instruction_text.value = f"Select the {ordinal} discount to apply:"
-            else:
-                instruction_text.value = "✅ All discounts ordered!"
-
-            # Chosen list with numbered badges
-            chosen_col.controls = []
-            for idx, key in enumerate(chosen):
-                meta = self.DISCOUNT_META.get(key, {})
-                label = meta.get("label", key)
-                chosen_col.controls.append(
-                    ft.Container(
-                        content=ft.Row([
-                            ft.Container(
-                                content=ft.Text(str(idx + 1), size=11, weight="bold", color=ft.colors.WHITE),
-                                bgcolor=AppColors.PRIMARY,
-                                border_radius=12,
-                                width=24, height=24,
-                                alignment=ft.alignment.center,
-                            ),
-                            ft.Text(label, size=13, weight="w500"),
-                        ], spacing=10),
-                        bgcolor="#EEF2FF",
-                        border_radius=8,
-                        padding=ft.padding.symmetric(horizontal=14, vertical=8),
-                        border=ft.border.all(1, "#C7D2FE"),
-                    )
-                )
-
-            # Available buttons
-            available_col.controls = []
-            for key in pending:
-                meta = self.DISCOUNT_META.get(key, {})
-                label = meta.get("label", key)
-                available_col.controls.append(
-                    ft.ElevatedButton(
-                        label, icon=ft.icons.ADD_CIRCLE_OUTLINE,
-                        on_click=lambda e, k=key: _pick(k),
-                        style=ft.ButtonStyle(
-                            bgcolor=ft.colors.WHITE,
-                            color=AppColors.PRIMARY,
-                            side=ft.BorderSide(1, AppColors.PRIMARY),
-                            shape=ft.RoundedRectangleBorder(radius=8),
-                        ),
-                        height=40,
-                    )
-                )
-            try:
-                self.update()
-            except Exception:
-                pass
-
-        def _pick(key):
-            pending.remove(key)
-            chosen.append(key)
-            _rebuild_ui()
-
-        def _confirm(e):
-            if len(chosen) == 5:
-                self._discount_order = list(chosen)
-                self._refresh_order_display()
-            self.modal_layer.visible = False
-            self.update()
-
-        def _reset_picker(e):
-            pending.clear()
-            pending.extend(self.DEFAULT_DISCOUNT_ORDER)
-            chosen.clear()
-            _rebuild_ui()
-
-        _rebuild_ui()  # Initial state
-
-        # Create a container-based dialog instead of ft.AlertDialog
-        dialog_content = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Text("Set Discount Application Order", weight="bold", size=16),
-                    ft.IconButton(ft.icons.CLOSE, on_click=lambda _: _close_dlg())
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                ft.Text("Pick discounts one by one to set the order they are applied during billing.",
-                        size=12, color=AppColors.TEXT_SUB, italic=True),
-                ft.Divider(height=1, color="#E2E8F0"),
-                instruction_text,
-                ft.Text("Available:", size=11, weight="bold", color="#64748B"),
-                available_col,
-                ft.Container(height=10),
-                ft.Text("Selected Order:", size=11, weight="bold", color=AppColors.PRIMARY),
-                chosen_col,
-                ft.Divider(height=1, color="#E2E8F0"),
-                ft.Row([
-                    ft.TextButton("Reset", icon=ft.icons.RESTART_ALT, on_click=_reset_picker),
-                    ft.Row([
-                        ft.TextButton("Cancel", on_click=lambda _: _close_dlg()),
-                        ft.ElevatedButton("Confirm", icon=ft.icons.CHECK, on_click=_confirm,
-                                          style=AppStyles.primary_button_style()),
-                    ], spacing=10)
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-            ], scroll=ft.ScrollMode.AUTO, spacing=10),
-            bgcolor=ft.colors.WHITE,
-            padding=20,
-            border_radius=12,
-            width=450,
-            height=500,
-            shadow=ft.BoxShadow(blur_radius=20, color="#40000000"),
-        )
-
-        def _close_dlg():
-            self.modal_layer.visible = False
-            self.update()
-
-        self.modal_layer.content = dialog_content
-        self.modal_layer.visible = True
-        self.update()
-
-
 # =========================================================
 # MASTERS SCREEN (Full Tabbed Layout)
 # =========================================================
@@ -1005,7 +781,7 @@ class MastersScreen(ft.Container):
             p["transporter_name"] = trans_map.get(str(p.get("transporter_id")), "-")
             p["price_list_name"] = plist_map.get(str(p.get("price_list_id")), "-")
             # Combined discount display
-            p["discounts"] = f"T:{p.get('discount_trade',0)} S:{p.get('discount_scheme',0)} F:{p.get('discount_festival',0)} SP:{p.get('discount_scd',0)} C:{p.get('discount_cd',0)}"
+            p["discounts"] = f"{p.get('discount_percent', 0)}%"
             p["full_billing"] = f"{p.get('billing_address_line1','')}, {p.get('billing_address_line2','')}, {p.get('billing_address_line3','')}, {p.get('billing_city','')}, {p.get('billing_state','')}"
             p["full_delivery"] = f"{p.get('delivery_address_line1','')}, {p.get('delivery_address_line2','')}, {p.get('delivery_address_line3','')}, {p.get('delivery_city','')}, {p.get('delivery_state','')}"
             p["status_str"] = "Blocked" if p.get("is_blocked") else "Approved"

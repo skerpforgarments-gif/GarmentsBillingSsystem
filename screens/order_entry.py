@@ -88,37 +88,25 @@ class OrderEntryTab(ft.Column):
         self.tcs_rate_tf  = ft.TextField(label="TCS %",  value="0", width=75, on_change=self.on_calc_change, **S)
         self.gst_amount   = ft.Text("GST: ₹0.00", size=12, color=AppColors.TEXT_SUB)
 
-        self.trade_disc   = ft.TextField(label="Discount %",  value="0", width=90, on_change=self.on_calc_change, **S)
-        self.td_amt_lbl   = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
-        self.scheme_disc  = ft.TextField(label="Scheme %", value="0", width=90, on_change=self.on_calc_change, **S)
-        self.spd_amt_lbl  = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
-        self.fest_disc    = ft.TextField(label="Fest %",   value="0", width=90, on_change=self.on_calc_change, **S)
-        self.fd_amt_lbl   = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
-        self.spec_disc    = ft.TextField(label="Spec %",   value="0", width=90, on_change=self.on_calc_change, **S)
-        self.scd_amt_lbl  = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
-        self.cash_disc    = ft.TextField(label="Cash %",   value="0", width=90, on_change=self.on_calc_change, **S)
-        self.cd_amt_lbl   = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
-
-        self.round_off    = ft.TextField(label="Round Off", value="0.00", width=90, **S)
-        self.gross_amount = ft.Text("₹0.00", size=26, weight="bold", color=AppColors.PRIMARY)
-
-        self.DEFAULT_DISCOUNT_ORDER = ["trade"]
-        self._discount_order = list(self.DEFAULT_DISCOUNT_ORDER)
-        self.DISCOUNT_MAP = {
-            "trade":    {"field": self.trade_disc,  "amt": self.td_amt_lbl},
-            "scheme":   {"field": self.scheme_disc, "amt": self.spd_amt_lbl},
-            "festival": {"field": self.fest_disc,   "amt": self.fd_amt_lbl},
-            "scd":      {"field": self.spec_disc,   "amt": self.scd_amt_lbl},
-            "cd":       {"field": self.cash_disc,   "amt": self.cd_amt_lbl},
-        }
-        self.discount_row = ft.Row(spacing=12, wrap=True)
-        self._reorder_discount_fields()
+        self.discount_percent = ft.TextField(label="Discount %", value="0", width=90, on_change=self.on_calc_change, **S)
+        self.discount_amount_lbl = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
+        
+        self.discount_row = ft.Row([
+            ft.Column([self.discount_percent, self.discount_amount_lbl], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        ], spacing=12, wrap=True)
 
         self.cgst_amt_lbl = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
         self.sgst_amt_lbl = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
-        self.igst_amt_lbl = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB, visible=False)
+        self.igst_amt_lbl = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
         self.cess_amt_lbl = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
         self.tcs_amt_lbl  = ft.Text("₹0.00", size=10, color=AppColors.TEXT_SUB)
+
+        self.cgst_col = ft.Column([self.cgst_rate_tf, self.cgst_amt_lbl], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        self.sgst_col = ft.Column([self.sgst_rate_tf, self.sgst_amt_lbl], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
+        self.igst_col = ft.Column([self.igst_rate_tf, self.igst_amt_lbl], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER, visible=False)
+
+        self.round_off    = ft.TextField(label="Round Off", value="0.00", width=90, on_change=self.on_calc_change, **S)
+        self.gross_amount = ft.Text("₹0.00", size=26, weight="bold", color=AppColors.PRIMARY)
 
         # ── Two-panel split containers ─────────────────────────
         self.left_panel  = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=6)
@@ -295,9 +283,9 @@ class OrderEntryTab(ft.Column):
                         self.tax_type_dd,
                         self.gst_rate_tf,
                         vdiv(),
-                        ft.Column([self.cgst_rate_tf, self.cgst_amt_lbl], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                        ft.Column([self.sgst_rate_tf, self.sgst_amt_lbl], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                        ft.Column([self.igst_rate_tf, self.igst_amt_lbl], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+                        self.cgst_col,
+                        self.sgst_col,
+                        self.igst_col,
                         vdiv(),
                         ft.Column([self.cess_rate_tf, self.cess_amt_lbl], spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                         ft.Column([self.tcs_rate_tf,  self.tcs_amt_lbl],  spacing=1, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
@@ -402,13 +390,7 @@ class OrderEntryTab(ft.Column):
             if p.get("remarks"):        self.remarks.value        = p["remarks"]
 
             # Auto-fill all 5 discount tiers from Party Master
-            self.trade_disc.value  = str(p.get("discount_trade",    0))
-            self.scheme_disc.value = str(p.get("discount_scheme",   0))
-            self.fest_disc.value   = str(p.get("discount_festival", 0))
-            self.spec_disc.value   = str(p.get("discount_scd",      0))
-            self.cash_disc.value   = str(p.get("discount_cd",       0))
-            # Load dynamic discount order
-            self._load_discount_order(p.get("discount_order"))
+            self.discount_percent.value = str(p.get("discount_percent", 0))
             
             # Load Tax Rates from Party Master
             self.gst_rate_tf.value  = str(p.get("gst_percent", 5) or 5)
@@ -423,30 +405,79 @@ class OrderEntryTab(ft.Column):
             self.igst_rate_tf.value = str(p.get("igst_percent", 0) or 0)
             
             self.on_price_type_change(None)
-            self.update_totals()
+            self.on_calc_change()
             self.update()
 
     def on_calc_change(self, e=None):
-        trigger = e.control if e else None
+        trigger = e.control if (e and hasattr(e, "control")) else self.tax_type_dd
+        tax_type = str(self.tax_type_dd.value or "GST").upper()
         
-        # 1. Sync CGST/SGST if the main GST rate is changed OR mode switched
-        if trigger == self.gst_rate_tf or trigger == self.tax_type_dd:
-            val_str = str(self.gst_rate_tf.value or "").strip()
+        # 1. Sync rates & visibility based on user input
+        if trigger == self.tax_type_dd:
+            if tax_type == "GST":
+                self.gst_rate_tf.visible = True
+                self.cgst_col.visible = True
+                self.sgst_col.visible = True
+                self.igst_col.visible = False
+                try:
+                    ig_val = float(self.igst_rate_tf.value or 0)
+                    g_val = float(self.gst_rate_tf.value or 0)
+                    if g_val == 0 and ig_val > 0:
+                        self.gst_rate_tf.value = f"{ig_val:g}"
+                        g_val = ig_val
+                    self.cgst_rate_tf.value = f"{g_val / 2:g}"
+                    self.sgst_rate_tf.value = f"{g_val / 2:g}"
+                except ValueError:
+                    pass
+            else: # IGST
+                self.gst_rate_tf.visible = False
+                self.cgst_col.visible = False
+                self.sgst_col.visible = False
+                self.igst_col.visible = True
+                try:
+                    g_val = float(self.gst_rate_tf.value or 0)
+                    ig_val = float(self.igst_rate_tf.value or 0)
+                    if ig_val == 0 and g_val > 0:
+                        self.igst_rate_tf.value = f"{g_val:g}"
+                except ValueError:
+                    pass
+
+        elif trigger == self.gst_rate_tf:
             try:
-                if val_str.endswith("."):
-                    gst_p = float(val_str + "0")
-                else:
-                    gst_p = float(val_str or 0)
-                
-                tax_type = str(self.tax_type_dd.value or "GST").upper()
-                if tax_type == "GST":
-                    self.cgst_rate_tf.value = f"{gst_p / 2:g}"
-                    self.sgst_rate_tf.value = f"{gst_p / 2:g}"
-                else:
-                    self.igst_rate_tf.value = f"{gst_p:g}"
+                g_val = float(self.gst_rate_tf.value or 0)
+                self.cgst_rate_tf.value = f"{g_val / 2:g}"
+                self.sgst_rate_tf.value = f"{g_val / 2:g}"
+                self.igst_rate_tf.value = f"{g_val:g}"
             except ValueError:
                 pass
-            
+
+        elif trigger == self.cgst_rate_tf:
+            try:
+                c_val = float(self.cgst_rate_tf.value or 0)
+                self.sgst_rate_tf.value = f"{c_val:g}"
+                self.gst_rate_tf.value = f"{c_val * 2:g}"
+                self.igst_rate_tf.value = f"{c_val * 2:g}"
+            except ValueError:
+                pass
+
+        elif trigger == self.sgst_rate_tf:
+            try:
+                s_val = float(self.sgst_rate_tf.value or 0)
+                self.cgst_rate_tf.value = f"{s_val:g}"
+                self.gst_rate_tf.value = f"{s_val * 2:g}"
+                self.igst_rate_tf.value = f"{s_val * 2:g}"
+            except ValueError:
+                pass
+
+        elif trigger == self.igst_rate_tf:
+            try:
+                ig_val = float(self.igst_rate_tf.value or 0)
+                self.gst_rate_tf.value = f"{ig_val:g}"
+                self.cgst_rate_tf.value = f"{ig_val / 2:g}"
+                self.sgst_rate_tf.value = f"{ig_val / 2:g}"
+            except ValueError:
+                pass
+
         # 2. Run the main calculation
         self.update_totals(trigger)
         
@@ -489,22 +520,7 @@ class OrderEntryTab(ft.Column):
         except Exception as ex:
             print(f"Price Switch Error: {ex}")
 
-    # ─── Dynamic Discount Order Helpers ──────────────────────
-    def _reorder_discount_fields(self):
-        """Rebuild the discount_row with columns in the current _discount_order."""
-        self.discount_row.controls = []
-        for key in self._discount_order:
-            meta = self.DISCOUNT_MAP.get(key)
-            if meta:
-                self.discount_row.controls.append(
-                    ft.Column([meta["field"], meta["amt"]],
-                              horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=2)
-                )
 
-    def _load_discount_order(self, raw_order):
-        """Parse discount_order from party data and reorder the footer fields."""
-        self._discount_order = ["trade"]
-        self._reorder_discount_fields()
 
     def on_qty_type_change(self, e):
         self.rebuild_grid()
@@ -946,32 +962,7 @@ class OrderEntryTab(ft.Column):
     # Totals
     # ─────────────────────────────────────────────────────────
     
-    def _reorder_discount_fields(self):
-        """Rebuilds the discount row according to self._discount_order."""
-        self.discount_row.controls.clear()
-        
-        has_discounts = False
-        for i, d_key in enumerate(self._discount_order):
-            if d_key in self.DISCOUNT_MAP:
-                has_discounts = True
-                fld = self.DISCOUNT_MAP[d_key]["field"]
-                amt = self.DISCOUNT_MAP[d_key]["amt"]
-                
-                fld.on_change = lambda e: self.update_totals()
-                
-                self.discount_row.controls.append(
-                    ft.Column([
-                        fld,
-                        amt,
-                    ], spacing=2, horizontal_alignment=ft.CrossAxisAlignment.CENTER)
-                )
-                
-                if i < len(self._discount_order) - 1:
-                    self.discount_row.controls.append(ft.Text("+", size=18, color=AppColors.TEXT_MUTED))
-                    
-        self.discount_row.visible = has_discounts
-        if self.page:
-            self.discount_row.update()
+
 
     def update_totals(self, trigger=None):
         total_pcs = 0
@@ -1003,36 +994,66 @@ class OrderEntryTab(ft.Column):
         self.total_units.value = f"{int(total_pcs)}"
         self.taxable_value.value = f"₹{base_sum:.2f}"
 
-        # Calculate Discounts (sequential logic)
+        # Calculate Discount
         current_amount = base_sum
-        for d_key in self._discount_order:
-            if d_key in self.DISCOUNT_MAP:
-                fld = self.DISCOUNT_MAP[d_key]["field"]
-                amt_lbl = self.DISCOUNT_MAP[d_key]["amt"]
-                
-                dp = float(fld.value or 0)
-                da = current_amount * (dp / 100)
-                current_amount -= da
-                amt_lbl.value = f"Amt: ₹{da:.2f}"
+        dp = float(self.discount_percent.value or 0)
+        da = current_amount * (dp / 100)
+        current_amount -= da
+        self.discount_amount_lbl.value = f"Amt: ₹{da:.2f}"
         
         discounted_taxable = current_amount
         
-        # Simple Tax (using GST for now, but applies on discounted taxable)
-        gst_p = float(self.gst_rate_tf.value or 0)
-        tax_amt = discounted_taxable * (gst_p / 100)
-        self._val_gst_amount = tax_amt
-        self.gst_amount.value = f"GST: ₹{tax_amt:.2f}"
+        # Tax Calculation (GST or IGST)
+        tax_type = str(self.tax_type_dd.value or "GST").upper()
+        
+        if tax_type == "GST":
+            cgst_p = float(self.cgst_rate_tf.value or 0)
+            sgst_p = float(self.sgst_rate_tf.value or 0)
+            
+            cgst_amt = discounted_taxable * (cgst_p / 100)
+            sgst_amt = discounted_taxable * (sgst_p / 100)
+            
+            self.cgst_amt_lbl.value = f"₹{cgst_amt:.2f}"
+            self.sgst_amt_lbl.value = f"₹{sgst_amt:.2f}"
+            self.igst_amt_lbl.value = "₹0.00"
+            
+            tax_amt = cgst_amt + sgst_amt
+            self.gst_amount.value = f"GST: ₹{tax_amt:.2f}"
+        else:
+            igst_p = float(self.igst_rate_tf.value or 0)
+            igst_amt = discounted_taxable * (igst_p / 100)
+            
+            self.igst_amt_lbl.value = f"₹{igst_amt:.2f}"
+            self.cgst_amt_lbl.value = "₹0.00"
+            self.sgst_amt_lbl.value = "₹0.00"
+            
+            tax_amt = igst_amt
+            self.gst_amount.value = f"IGST: ₹{tax_amt:.2f}"
+
+        cess_p = float(self.cess_rate_tf.value or 0)
+        cess_amt = discounted_taxable * (cess_p / 100)
+        self.cess_amt_lbl.value = f"₹{cess_amt:.2f}"
+
+        tcs_p = float(self.tcs_rate_tf.value or 0)
+        tcs_amt = discounted_taxable * (tcs_p / 100)
+        self.tcs_amt_lbl.value = f"₹{tcs_amt:.2f}"
         
         # Grand Total
-        grand_total = discounted_taxable + tax_amt
+        grand_total = discounted_taxable + tax_amt + cess_amt + tcs_amt
         
-        rounded = math.ceil(grand_total)
-        diff = rounded - grand_total
-        
+        if trigger == self.round_off:
+            try:
+                diff = float(self.round_off.value or 0)
+            except ValueError:
+                diff = 0.0
+            rounded = round(grand_total + diff, 2)
+        else:
+            rounded = math.ceil(grand_total)
+            diff = rounded - grand_total
+            self.round_off.value = f"{diff:.2f}"
+
         self._val_round_off = diff
         self._val_net_amount = rounded
-        
-        self.round_off.value = f"{diff:.2f}"
         self.gross_amount.value = f"Total: ₹{rounded:.2f}"
         
         if self.page:
@@ -1097,6 +1118,8 @@ class OrderEntryTab(ft.Column):
                 "company_id":     state.company_id,
                 "order_no":       order_val,
                 "order_date":     date_to_iso(self.order_date.value),
+                "discount_percent": float(self.discount_percent.value or 0),
+                "discount_amount":  safe_float_label(self.discount_amount_lbl),
                 "party_id":       self.party_dd.value,
                 "agent_id":       self.agent_dd.value if getattr(self.agent_dd, 'value', None) else None,
                 "transporter_id": self.transporter_dd.value,
@@ -1113,25 +1136,13 @@ class OrderEntryTab(ft.Column):
                 "total_pcs":      int(safe_float_label(self.total_pcs)),
                 "total_boxes":    safe_float_label(self.total_boxes),
                 
-                # Discounts
-                "td_percent":     float(self.trade_disc.value or 0),
-                "td_amount":      safe_float_label(self.td_amt_lbl),
-                "spd_percent":    float(self.scheme_disc.value or 0),
-                "spd_amount":     safe_float_label(self.spd_amt_lbl),
-                "festival_percent": float(self.fest_disc.value or 0),
-                "festival_amount":  safe_float_label(self.fd_amt_lbl),
-                "scd_percent":    float(self.spec_disc.value or 0),
-                "scd_amount":     safe_float_label(self.scd_amt_lbl),
-                "cd_percent":     float(self.cash_disc.value or 0),
-                "cd_amount":      safe_float_label(self.cd_amt_lbl),
-                
                 "cgst_amount":    safe_float_label(self.cgst_amt_lbl),
                 "sgst_amount":    safe_float_label(self.sgst_amt_lbl),
                 "igst_amount":    safe_float_label(self.igst_amt_lbl),
                 
                 "tax_type":       self.tax_type_dd.value,
-                "tax_per":        float(self.gst_rate_tf.value or 0),
-                "vat_cst_amount": total_tax_amt,
+                "tax_per":        float(self.gst_rate_tf.value or 0) if (self.tax_type_dd.value or "GST").upper() == "GST" else float(self.igst_rate_tf.value or 0),
+                "gst_amount":     total_tax_amt,
                 "total_amount":   safe_float_label(self.taxable_value),
                 "round_off":      float(self.round_off.value or 0),
                 "net_amount":     safe_float_label(self.gross_amount),
@@ -1150,12 +1161,7 @@ class OrderEntryTab(ft.Column):
                 order_id = res[0]["id"]
 
             # Calculate Footer Discount Multiplier
-            footer_multiplier = 1.0
-            for key in self._discount_order:
-                meta = self.DISCOUNT_MAP.get(key)
-                if meta:
-                    d = float(meta["field"].value or 0)
-                    footer_multiplier *= (1 - d / 100)
+            footer_multiplier = (1 - float(self.discount_percent.value or 0) / 100)
 
             local_order_items = []
             for item in self.order_items:
@@ -1201,13 +1207,7 @@ class OrderEntryTab(ft.Column):
             order_data["agent_name"] = get_dd_text(self.agent_dd)
             order_data["transporter_name"] = get_dd_text(self.transporter_dd)
 
-            # Fetch extra party info for PDF
-            if header["party_id"]:
-                p_data = select("parties", {"id": header["party_id"]})
-                if p_data:
-                    order_data["party_address"] = p_data[0].get("address", "")
-                    order_data["party_mob"] = p_data[0].get("mobile", "")
-                    order_data["party_gstin"] = p_data[0].get("gst_details", "")
+            order_data = self._enrich_order_data_for_pdf(order_data)
 
             comp_data = select("companies", {"id": state.company_id})
             company = comp_data[0] if comp_data else {}
@@ -1240,14 +1240,8 @@ class OrderEntryTab(ft.Column):
         self.no_of_cases.value = "1"
         self.qty_type.value = "Pieces"
 
-        self.trade_disc.value = "0"
-        self.scheme_disc.value = "0"
-        self.fest_disc.value = "0"
-        self.spec_disc.value = "0"
-        self.cash_disc.value = "0"
+        self.discount_percent.value = "0"
         self.round_off.value = "0.00"
-        self._discount_order = list(self.DEFAULT_DISCOUNT_ORDER)
-        self._reorder_discount_fields()
         self.SIZES = []
         self.order_items = []
         self.selected_item_index = 0
@@ -1342,11 +1336,7 @@ class OrderEntryTab(ft.Column):
             self.tax_type_dd.value = order.get("tax_type", "GST")
             self.gst_rate_tf.value  = str(order.get("tax_per", 5))
             
-            self.trade_disc.value  = str(order.get("td_percent", 0))
-            self.scheme_disc.value = str(order.get("spd_percent", 0))
-            self.fest_disc.value   = str(order.get("festival_percent", 0))
-            self.spec_disc.value   = str(order.get("scd_percent", 0))
-            self.cash_disc.value   = str(order.get("cd_percent", 0))
+            self.discount_percent.value = str(order.get("discount_percent", 0))
             
             # Load items
             db_items = select("order_items", {"order_id": order["id"]})
@@ -1491,22 +1481,45 @@ class OrderEntryTab(ft.Column):
             comp_data = select("companies", {"id": state.company_id})
             company = comp_data[0] if comp_data else {}
 
-            if order.get("party_id"):
-                p_data = select("parties", {"id": order["party_id"]})
-                if p_data: order["party_name"] = p_data[0]["name"]
-            if order.get("agent_id"):
-                a_data = select("agents", {"id": order["agent_id"]})
-                if a_data: order["agent_name"] = a_data[0]["name"]
-            if order.get("transporter_id"):
-                t_data = select("transporters", {"id": order["transporter_id"]})
-                if t_data: order["transporter_name"] = t_data[0]["name"]
-
+            order = self._enrich_order_data_for_pdf(dict(order))
             pdf_path = pdf_engine.generate_order(order, items, company)
             print_pdf(pdf_path)
         except Exception as ex:
             self.page.snack_bar = ft.SnackBar(ft.Text(f"Error printing: {ex}"), bgcolor="red")
             self.page.snack_bar.open = True
             self.page.update()
+
+    def _enrich_order_data_for_pdf(self, order_dict):
+        pid = order_dict.get("party_id")
+        if pid:
+            p_data = select("parties", {"id": pid})
+            if p_data:
+                p = p_data[0]
+                order_dict["party_name"] = p.get("name", "")
+                
+                # Billing address
+                b_parts = [p.get("billing_address_line1"), p.get("billing_address_line2"), p.get("billing_address_line3"), p.get("billing_city"), p.get("billing_state"), p.get("billing_pincode")]
+                order_dict["party_address"] = ", ".join([str(x).strip() for x in b_parts if x and str(x).strip()])
+                
+                # Delivery address
+                d_parts = [p.get("delivery_address_line1"), p.get("delivery_address_line2"), p.get("delivery_address_line3"), p.get("delivery_city"), p.get("delivery_state"), p.get("delivery_pincode")]
+                order_dict["delivery_address"] = ", ".join([str(x).strip() for x in d_parts if x and str(x).strip()])
+                
+                # Mobile / Phone
+                order_dict["party_mob"] = str(p.get("mobile") or p.get("phone") or "")
+                
+                # GSTIN
+                order_dict["party_gstin"] = str(p.get("gstin") or "")
+                
+        if order_dict.get("agent_id"):
+            a_data = select("agents", {"id": order_dict["agent_id"]})
+            if a_data: order_dict["agent_name"] = a_data[0].get("name", "")
+            
+        if order_dict.get("transporter_id"):
+            t_data = select("transporters", {"id": order_dict["transporter_id"]})
+            if t_data: order_dict["transporter_name"] = t_data[0].get("name", "")
+            
+        return order_dict
 
 
 # =========================================================

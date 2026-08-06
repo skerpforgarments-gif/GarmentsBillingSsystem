@@ -9,7 +9,7 @@ from core.pdf_gen import pdf_engine, print_pdf
 # ═══════════════════════════════════════════════════════════════
 # SHARED: TOOLBAR BUILDER
 # ═══════════════════════════════════════════════════════════════
-def build_toolbar(on_new, on_save, on_delete, on_prev, on_next, on_print, on_clear):
+def build_toolbar(on_new, on_save, on_delete, on_prev, on_next, on_print, on_clear, on_history=None):
     return ft.Container(
         bgcolor="#F0F4FF",
         padding=ft.padding.symmetric(horizontal=12, vertical=6),
@@ -26,6 +26,8 @@ def build_toolbar(on_new, on_save, on_delete, on_prev, on_next, on_print, on_cle
             ft.IconButton(ft.icons.SKIP_PREVIOUS_ROUNDED, on_click=on_prev, tooltip="Previous", icon_color=AppColors.PRIMARY),
             ft.IconButton(ft.icons.SKIP_NEXT_ROUNDED, on_click=on_next, tooltip="Next", icon_color=AppColors.PRIMARY),
             ft.VerticalDivider(width=1, color="#CBD5E1"),
+            ft.ElevatedButton("History", icon=ft.icons.HISTORY, on_click=on_history,
+                              style=ft.ButtonStyle(bgcolor="#3B82F6", color="white", shape=ft.RoundedRectangleBorder(radius=6))),
             ft.ElevatedButton("Print", icon=ft.icons.PRINT, on_click=on_print,
                               style=ft.ButtonStyle(bgcolor="#8B5CF6", color="white", shape=ft.RoundedRectangleBorder(radius=6))),
             ft.OutlinedButton("Clear", icon=ft.icons.CLEAR_ALL, on_click=on_clear),
@@ -38,6 +40,23 @@ def _snack(page, msg, color="green"):
         page.snack_bar = ft.SnackBar(ft.Text(msg), bgcolor=color)
         page.snack_bar.open = True
         page.update()
+
+
+def _close_dialog(page, dlg):
+    if dlg:
+        dlg.open = False
+    if page:
+        page.update()
+
+
+def _format_ts(ts):
+    if not ts: return "-"
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
+        return dt.strftime("%b %d, %Y %I:%M %p")
+    except:
+        return str(ts)[:16]
 
 
 def _get_fy():
@@ -113,7 +132,7 @@ class YarnPOScreen(ft.Container):
 
         add_row_btn = ft.TextButton("+ Add Row", on_click=lambda _: self._add_row(), icon=ft.icons.ADD)
 
-        toolbar = build_toolbar(self._new, self._save, self._delete, self._prev, self._next, self._print, self._clear)
+        toolbar = build_toolbar(self._new, self._save, self._delete, self._prev, self._next, self._print, self._clear, self._history)
 
         self.content = ft.Column([
             # Title
@@ -379,6 +398,122 @@ class YarnPOScreen(ft.Container):
         except Exception as ex:
             _snack(self.page, f"Print Error: {ex}", "red")
 
+    def _history(self, e):
+        recs = select(self.TABLE, {"company_id": state.company_id})
+        recs.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+
+        lv = ft.ListView(expand=1, spacing=10, padding=10)
+        if not recs:
+            lv.controls.append(ft.Container(content=ft.Text("No Purchase Orders found", color=AppColors.TEXT_MUTED), padding=20))
+
+        for r in recs:
+            r_id = str(r["id"])
+            doc_no = r.get("po_no", "-")
+            doc_date = r.get("po_date", "-")
+            created_at = _format_ts(r.get("created_at"))
+            supplier = r.get("supplier_name") or "-"
+            tot_qty = float(r.get("total_qty_kgs") or 0)
+            grand_total = float(r.get("grand_total") or 0)
+
+            lv.controls.append(
+                ft.Container(
+                    padding=12,
+                    bgcolor=ft.colors.WHITE,
+                    border_radius=8,
+                    border=ft.border.all(1, "#E2E8F0"),
+                    shadow=ft.BoxShadow(blur_radius=4, color="#0A000000"),
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Text(doc_no, weight="bold", size=14, color=AppColors.TEXT_HEADER),
+                            ft.Row([
+                                ft.Icon(ft.icons.CALENDAR_TODAY, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(doc_date, size=11, color=ft.colors.BLUE_GREY_600),
+                                ft.VerticalDivider(width=10),
+                                ft.Icon(ft.icons.ACCESS_TIME, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(created_at, size=11, color=ft.colors.BLUE_GREY_600),
+                            ], spacing=5),
+                            ft.Text(supplier, size=13, weight="w500", color=AppColors.PRIMARY),
+                        ], expand=True, spacing=4),
+                        ft.Column([
+                            ft.Text(f"{tot_qty:,.3f} Kgs", size=12, weight="bold"),
+                            ft.Text(f"₹ {grand_total:,.2f}", size=15, weight="bold", color=ft.colors.GREEN_700),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=2),
+                        ft.Row([
+                            ft.IconButton(ft.icons.EDIT_OUTLINED, tooltip="Edit PO", icon_color=AppColors.PRIMARY,
+                                          on_click=lambda e, rid=r_id: self._load_from_history(rid, dlg)),
+                            ft.IconButton(ft.icons.PRINT, tooltip="Print PO", icon_color=ft.colors.BLUE_700,
+                                          on_click=lambda e, rec=r: self._print_history(rec)),
+                            ft.IconButton(ft.icons.DELETE_OUTLINE, tooltip="Delete PO", icon_color="red",
+                                          on_click=lambda e, rec=r: self._delete_from_history(rec, dlg))
+                        ], spacing=4)
+                    ])
+                )
+            )
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Recent Yarn Purchase Orders"),
+            content=ft.Container(width=650, height=450, content=lv),
+            actions=[ft.TextButton("Close", on_click=lambda e: _close_dialog(self.page, dlg))]
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
+
+    def _load_from_history(self, rec_id, dlg):
+        _close_dialog(self.page, dlg)
+        self._load_record(rec_id)
+
+    def _print_history(self, record):
+        try:
+            items_data = select(self.ITEMS_TABLE, {"po_id": record["id"]})
+            items = [{
+                "item_name": it.get("item_name", ""),
+                "bags": it.get("bags", 0),
+                "qty_kgs": it.get("qty_kgs", 0),
+                "rate": it.get("rate", 0),
+                "tax_percent": it.get("gst_percent", 0),
+            } for it in items_data]
+            header = {
+                "po_no": record.get("po_no", ""),
+                "po_date": record.get("po_date", ""),
+                "supplier_name": record.get("supplier_name", ""),
+                "supplier_address": "",
+                "delivery": record.get("delivery", ""),
+                "remarks": record.get("remarks", ""),
+            }
+            comp = state.current_company or {}
+            path = pdf_engine.generate_yarn_po(header, items, comp)
+            print_pdf(path)
+            _snack(self.page, "PDF Generated")
+        except Exception as ex:
+            _snack(self.page, f"Print Error: {ex}", "red")
+
+    def _delete_from_history(self, record, dlg):
+        def confirm_del(e):
+            try:
+                rec_id = str(record["id"])
+                delete(self.ITEMS_TABLE, {"po_id": rec_id})
+                delete(self.TABLE, {"id": rec_id})
+                _close_dialog(self.page, confirm_dlg)
+                _close_dialog(self.page, dlg)
+                self._load_list()
+                self._new(None)
+                _snack(self.page, f"PO {record.get('po_no')} deleted successfully", "green")
+            except Exception as ex:
+                _snack(self.page, f"Delete Error: {ex}", "red")
+
+        confirm_dlg = ft.AlertDialog(
+            title=ft.Text("Confirm Delete"),
+            content=ft.Text(f"Are you sure you want to delete PO {record.get('po_no')}? This cannot be undone."),
+            actions=[
+                ft.TextButton("Yes, Delete", on_click=confirm_del, style=ft.ButtonStyle(color="red")),
+                ft.TextButton("Cancel", on_click=lambda e: _close_dialog(self.page, confirm_dlg))
+            ]
+        )
+        self.page.overlay.append(confirm_dlg)
+        confirm_dlg.open = True
+        self.page.update()
+
 
 # ═══════════════════════════════════════════════════════════════
 #  2. KNITTING PROGRAM SCREEN
@@ -423,7 +558,7 @@ class KnittingProgramScreen(ft.Container):
         )
         self.grid_body = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
 
-        toolbar = build_toolbar(self._new, self._save, self._delete, self._prev, self._next, self._print, self._clear)
+        toolbar = build_toolbar(self._new, self._save, self._delete, self._prev, self._next, self._print, self._clear, self._history)
 
         self.content = ft.Column([
             ft.Container(bgcolor="#DC2626", padding=ft.padding.symmetric(horizontal=20, vertical=10),
@@ -597,6 +732,120 @@ class KnittingProgramScreen(ft.Container):
         except Exception as ex:
             _snack(self.page, f"Print Error: {ex}", "red")
 
+    def _history(self, e):
+        recs = select(self.TABLE, {"company_id": state.company_id})
+        recs.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+
+        lv = ft.ListView(expand=1, spacing=10, padding=10)
+        if not recs:
+            lv.controls.append(ft.Container(content=ft.Text("No Knitting Programs found", color=AppColors.TEXT_MUTED), padding=20))
+
+        for r in recs:
+            r_id = str(r["id"])
+            doc_no = r.get("prog_no", "-")
+            doc_date = r.get("prog_date", "-")
+            created_at = _format_ts(r.get("created_at"))
+            party = r.get("party_name") or "-"
+            remarks = r.get("remarks") or ""
+
+            lv.controls.append(
+                ft.Container(
+                    padding=12,
+                    bgcolor=ft.colors.WHITE,
+                    border_radius=8,
+                    border=ft.border.all(1, "#E2E8F0"),
+                    shadow=ft.BoxShadow(blur_radius=4, color="#0A000000"),
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Text(doc_no, weight="bold", size=14, color=AppColors.TEXT_HEADER),
+                            ft.Row([
+                                ft.Icon(ft.icons.CALENDAR_TODAY, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(doc_date, size=11, color=ft.colors.BLUE_GREY_600),
+                                ft.VerticalDivider(width=10),
+                                ft.Icon(ft.icons.ACCESS_TIME, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(created_at, size=11, color=ft.colors.BLUE_GREY_600),
+                            ], spacing=5),
+                            ft.Text(party, size=13, weight="w500", color=AppColors.PRIMARY),
+                        ], expand=True, spacing=4),
+                        ft.Column([
+                            ft.Text(f"Ref: {r.get('ref') or '-'}", size=11, color=AppColors.TEXT_MUTED),
+                            ft.Text(f"{remarks[:30]}..." if len(remarks) > 30 else remarks, size=11, color=AppColors.TEXT_SUB),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=2),
+                        ft.Row([
+                            ft.IconButton(ft.icons.EDIT_OUTLINED, tooltip="Edit Program", icon_color=AppColors.PRIMARY,
+                                          on_click=lambda e, rid=r_id: self._load_from_history(rid, dlg)),
+                            ft.IconButton(ft.icons.PRINT, tooltip="Print Program", icon_color=ft.colors.BLUE_700,
+                                          on_click=lambda e, rec=r: self._print_history(rec)),
+                            ft.IconButton(ft.icons.DELETE_OUTLINE, tooltip="Delete Program", icon_color="red",
+                                          on_click=lambda e, rec=r: self._delete_from_history(rec, dlg))
+                        ], spacing=4)
+                    ])
+                )
+            )
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Recent Knitting Programs"),
+            content=ft.Container(width=650, height=450, content=lv),
+            actions=[ft.TextButton("Close", on_click=lambda e: _close_dialog(self.page, dlg))]
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
+
+    def _load_from_history(self, rec_id, dlg):
+        _close_dialog(self.page, dlg)
+        self._load_record(rec_id)
+
+    def _print_history(self, record):
+        try:
+            items_data = select(self.ITEMS_TABLE, {"program_id": record["id"]})
+            items = [{
+                "item_name": it.get("item_name", ""),
+                "yarn_desc": it.get("yarn_description", ""),
+                "gsm": it.get("gsm_ll", ""),
+                "gg": it.get("gg", ""),
+                "dia": it.get("dia", ""),
+                "weight": it.get("weight", 0),
+                "rolls": it.get("roll_pcs", 0),
+            } for it in items_data]
+            header = {
+                "prog_no": record.get("prog_no", ""),
+                "prog_date": record.get("prog_date", ""),
+                "party_name": record.get("party_name", ""),
+                "remarks": record.get("remarks", ""),
+            }
+            path = pdf_engine.generate_knitting_program(header, items, state.current_company or {})
+            print_pdf(path)
+            _snack(self.page, "PDF Generated")
+        except Exception as ex:
+            _snack(self.page, f"Print Error: {ex}", "red")
+
+    def _delete_from_history(self, record, dlg):
+        def confirm_del(e):
+            try:
+                rec_id = str(record["id"])
+                delete(self.ITEMS_TABLE, {"program_id": rec_id})
+                delete(self.TABLE, {"id": rec_id})
+                _close_dialog(self.page, confirm_dlg)
+                _close_dialog(self.page, dlg)
+                self._load_list()
+                self._new(None)
+                _snack(self.page, f"Program {record.get('prog_no')} deleted successfully", "green")
+            except Exception as ex:
+                _snack(self.page, f"Delete Error: {ex}", "red")
+
+        confirm_dlg = ft.AlertDialog(
+            title=ft.Text("Confirm Delete"),
+            content=ft.Text(f"Are you sure you want to delete Knitting Program {record.get('prog_no')}? This cannot be undone."),
+            actions=[
+                ft.TextButton("Yes, Delete", on_click=confirm_del, style=ft.ButtonStyle(color="red")),
+                ft.TextButton("Cancel", on_click=lambda e: _close_dialog(self.page, confirm_dlg))
+            ]
+        )
+        self.page.overlay.append(confirm_dlg)
+        confirm_dlg.open = True
+        self.page.update()
+
 
 # ═══════════════════════════════════════════════════════════════
 #  3. DYEING PROGRAM SCREEN
@@ -640,7 +889,7 @@ class DyeingProgramScreen(ft.Container):
         )
         self.grid_body = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
 
-        toolbar = build_toolbar(self._new, self._save, self._delete, self._prev, self._next, self._print, self._clear)
+        toolbar = build_toolbar(self._new, self._save, self._delete, self._prev, self._next, self._print, self._clear, self._history)
 
         self.content = ft.Column([
             ft.Container(bgcolor="#7C3AED", padding=ft.padding.symmetric(horizontal=20, vertical=10),
@@ -811,3 +1060,115 @@ class DyeingProgramScreen(ft.Container):
             print_pdf(path); _snack(self.page, "PDF Generated")
         except Exception as ex:
             _snack(self.page, f"Print Error: {ex}", "red")
+
+    def _history(self, e):
+        recs = select(self.TABLE, {"company_id": state.company_id})
+        recs.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+
+        lv = ft.ListView(expand=1, spacing=10, padding=10)
+        if not recs:
+            lv.controls.append(ft.Container(content=ft.Text("No Dyeing Programs found", color=AppColors.TEXT_MUTED), padding=20))
+
+        for r in recs:
+            r_id = str(r["id"])
+            doc_no = r.get("prog_no", "-")
+            doc_date = r.get("prog_date", "-")
+            created_at = _format_ts(r.get("created_at"))
+            party = r.get("party_name") or "-"
+            remarks = r.get("remarks") or ""
+
+            lv.controls.append(
+                ft.Container(
+                    padding=12,
+                    bgcolor=ft.colors.WHITE,
+                    border_radius=8,
+                    border=ft.border.all(1, "#E2E8F0"),
+                    shadow=ft.BoxShadow(blur_radius=4, color="#0A000000"),
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Text(doc_no, weight="bold", size=14, color=AppColors.TEXT_HEADER),
+                            ft.Row([
+                                ft.Icon(ft.icons.CALENDAR_TODAY, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(doc_date, size=11, color=ft.colors.BLUE_GREY_600),
+                                ft.VerticalDivider(width=10),
+                                ft.Icon(ft.icons.ACCESS_TIME, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(created_at, size=11, color=ft.colors.BLUE_GREY_600),
+                            ], spacing=5),
+                            ft.Text(party, size=13, weight="w500", color=AppColors.PRIMARY),
+                        ], expand=True, spacing=4),
+                        ft.Column([
+                            ft.Text(f"Ref: {r.get('ref') or '-'}", size=11, color=AppColors.TEXT_MUTED),
+                            ft.Text(f"{remarks[:30]}..." if len(remarks) > 30 else remarks, size=11, color=AppColors.TEXT_SUB),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=2),
+                        ft.Row([
+                            ft.IconButton(ft.icons.EDIT_OUTLINED, tooltip="Edit Program", icon_color=AppColors.PRIMARY,
+                                          on_click=lambda e, rid=r_id: self._load_from_history(rid, dlg)),
+                            ft.IconButton(ft.icons.PRINT, tooltip="Print Program", icon_color=ft.colors.BLUE_700,
+                                          on_click=lambda e, rec=r: self._print_history(rec)),
+                            ft.IconButton(ft.icons.DELETE_OUTLINE, tooltip="Delete Program", icon_color="red",
+                                          on_click=lambda e, rec=r: self._delete_from_history(rec, dlg))
+                        ], spacing=4)
+                    ])
+                )
+            )
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Recent Dyeing Programs"),
+            content=ft.Container(width=650, height=450, content=lv),
+            actions=[ft.TextButton("Close", on_click=lambda e: _close_dialog(self.page, dlg))]
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
+
+    def _load_from_history(self, rec_id, dlg):
+        _close_dialog(self.page, dlg)
+        self._load_record(rec_id)
+
+    def _print_history(self, record):
+        try:
+            items_data = select(self.ITEMS_TABLE, {"program_id": record["id"]})
+            items = [{
+                "item_name": it.get("item_name", ""),
+                "colour": it.get("colour", ""),
+                "process": it.get("process", ""),
+                "weight": it.get("weight_kgs", 0),
+                "batch": it.get("batch", ""),
+            } for it in items_data]
+            header = {
+                "prog_no": record.get("prog_no", ""),
+                "prog_date": record.get("prog_date", ""),
+                "party_name": record.get("party_name", ""),
+                "remarks": record.get("remarks", ""),
+            }
+            path = pdf_engine.generate_dyeing_program(header, items, state.current_company or {})
+            print_pdf(path)
+            _snack(self.page, "PDF Generated")
+        except Exception as ex:
+            _snack(self.page, f"Print Error: {ex}", "red")
+
+    def _delete_from_history(self, record, dlg):
+        def confirm_del(e):
+            try:
+                rec_id = str(record["id"])
+                delete(self.ITEMS_TABLE, {"program_id": rec_id})
+                delete(self.TABLE, {"id": rec_id})
+                _close_dialog(self.page, confirm_dlg)
+                _close_dialog(self.page, dlg)
+                self._load_list()
+                self._new(None)
+                _snack(self.page, f"Program {record.get('prog_no')} deleted successfully", "green")
+            except Exception as ex:
+                _snack(self.page, f"Delete Error: {ex}", "red")
+
+        confirm_dlg = ft.AlertDialog(
+            title=ft.Text("Confirm Delete"),
+            content=ft.Text(f"Are you sure you want to delete Dyeing Program {record.get('prog_no')}? This cannot be undone."),
+            actions=[
+                ft.TextButton("Yes, Delete", on_click=confirm_del, style=ft.ButtonStyle(color="red")),
+                ft.TextButton("Cancel", on_click=lambda e: _close_dialog(self.page, confirm_dlg))
+            ]
+        )
+        self.page.overlay.append(confirm_dlg)
+        confirm_dlg.open = True
+        self.page.update()

@@ -40,6 +40,7 @@ class MainLayout(ft.Row):
             ("Knitting", "knitting", ft.icons.PRECISION_MANUFACTURING),
             ("Cheque", "cheque", ft.icons.ACCOUNT_BALANCE),
             ("Reports", "reports", ft.icons.BAR_CHART),
+            ("Settings", "settings", ft.icons.SETTINGS),
         ]
         self.nav_buttons = {}
         self.sidebar_column = ft.Column(spacing=5)

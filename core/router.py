@@ -5,6 +5,7 @@ from screens.reports import ReportsScreen
 from screens.login import LoginScreen
 from screens.production import YarnPOScreen, KnittingProgramScreen, DyeingProgramScreen
 from screens.cheque_entry import ChequeEntryScreen
+from screens.settings import SettingsScreen
 
 
 class Router:
@@ -27,6 +28,7 @@ class Router:
             "dyeing": DyeingProgramScreen,
             "knitting": KnittingProgramScreen,
             "cheque": ChequeEntryScreen,
+            "settings": SettingsScreen,
         }
 
     # =========================================================

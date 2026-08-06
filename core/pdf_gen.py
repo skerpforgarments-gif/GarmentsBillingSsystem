@@ -442,16 +442,18 @@ class PDFGenerator:
         filename = f"Order_{order_header.get('order_no', 'TEMP')}.pdf"
         filepath = os.path.join(self.output_dir, filename)
         
-        # Professional margins
-        doc = SimpleDocTemplate(filepath, pagesize=A4, leftMargin=0.5*inch, rightMargin=0.5*inch, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        # Professional compact margins (forces single-page output)
+        doc = SimpleDocTemplate(filepath, pagesize=A4, leftMargin=0.4*inch, rightMargin=0.4*inch, topMargin=0.4*inch, bottomMargin=0.4*inch)
         elements = []
-        PAGE_WIDTH = 7.27 * inch
+        PAGE_WIDTH = 7.47 * inch
 
         # 1. Header block
         comp_name = str(company_data.get("name") or "YOUR COMPANY NAME").upper()
         comp_addr = str(company_data.get("address") or "")
         comp_gst_raw = str(company_data.get("gst_details") or "")
         comp_gst = comp_gst_raw.replace("GSTIN:", "").replace("GSTIN :", "").strip()
+        comp_mob = str(company_data.get("mobile") or company_data.get("phone") or company_data.get("phone_no") or "").strip()
+        mob_text = f"<b>Mob : {comp_mob}</b>" if comp_mob else ""
         
         title_box = Table([[Paragraph("<b>SALES ORDER</b>", self.styles['CenterBold'])]], 
                           colWidths=[2.0*inch], 
@@ -461,7 +463,7 @@ class PDFGenerator:
             [title_box, ""],
             [Paragraph(f"<b><font size=16>{comp_name}</font></b>", self.styles['CenterBold']), ""],
             [Paragraph(f"<font size=10>{comp_addr}</font>", self.styles['CenterBold']), ""],
-            [Paragraph(f"<b>GSTIN : {comp_gst}</b>", self.styles['Normal']), Paragraph(f"<b>Mob : {company_data.get('phone', '')}</b>", self.styles['RightAlign'])]
+            [Paragraph(f"<b>GSTIN : {comp_gst}</b>", self.styles['Normal']), Paragraph(mob_text, self.styles['RightAlign'])]
         ]
         
         header_t = Table(header_data, colWidths=[PAGE_WIDTH/2.0, PAGE_WIDTH/2.0])
@@ -472,19 +474,20 @@ class PDFGenerator:
             ('ALIGN', (0, 0), (1, 2), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('LINEABOVE', (0, 3), (1, 3), 1, colors.black),
-            ('TOPPADDING', (0, 3), (1, 3), 6),
-            ('BOTTOMPADDING', (0, 3), (1, 3), 6),
+            ('TOPPADDING', (0, 3), (1, 3), 4),
+            ('BOTTOMPADDING', (0, 3), (1, 3), 4),
         ])
 
         # 2. Party Details & Salutation
         party_name = str(order_header.get('party_name') or "-")
         party_addr = str(order_header.get('party_address') or "")
+        delivery_addr = str(order_header.get('delivery_address') or "")
         party_gst = str(order_header.get('party_gstin') or "").replace("GSTIN:", "").replace("GSTIN :", "").strip()
         party_mob = str(order_header.get('party_mob') or "")
 
         party_html = f"<b>M/S. &nbsp;&nbsp;&nbsp;&nbsp;{party_name}</b>"
         if party_addr:
-            party_html += f"<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{party_addr}"
+            party_html += f"<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>Address:</b> {party_addr}"
         if party_gst:
             party_html += f"<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b>GSTIN:</b> {party_gst}"
         if party_mob:
@@ -506,13 +509,13 @@ class PDFGenerator:
             ('SPAN', (0, 0), (1, 0)),
             ('SPAN', (0, 4), (1, 4)),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('BOTTOMPADDING', (0, 4), (1, 4), 10),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, 3), 4),
+            ('BOTTOMPADDING', (0, 4), (1, 4), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, 3), 3),
         ])
 
         # 3. Items Table
-        col_widths = [0.5*inch, 2.77*inch, 0.8*inch, 0.6*inch, 0.7*inch, 0.9*inch, 1.0*inch]
+        col_widths = [0.5*inch, 2.97*inch, 0.8*inch, 0.6*inch, 0.7*inch, 0.9*inch, 1.0*inch]
         item_data = [
             [Paragraph("<font size=9><b>SL.No</b></font>", self.styles['CenterBold']),
              Paragraph("<font size=9><b>Description</b></font>", self.styles['CenterBold']),
@@ -543,7 +546,7 @@ class PDFGenerator:
                 f"{total_row_amt:,.2f}"
             ])
             
-        for _ in range(5 - min(5, len(items))):
+        for _ in range(3 - min(3, len(items))):
             item_data.append(["", "", "", "", "", "", ""])
             
         item_t = Table(item_data, colWidths=col_widths)
@@ -558,9 +561,9 @@ class PDFGenerator:
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('ALIGN', (1, 1), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -2), 6),
-            ('BOTTOMPADDING', (0, -1), (-1, -1), 40),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -2), 4),
+            ('BOTTOMPADDING', (0, -1), (-1, -1), 15),
         ])
 
         # 3.5 & 4. Footer1: Words and Total Breakdown
@@ -569,33 +572,38 @@ class PDFGenerator:
         
         breakdown_data.append([Paragraph("<b>Gross Amount:</b>", self.styles['RightAlign']), f"{gross:,.2f}"])
         
-        discs = [
-            ("Trade Disc", "td_amount"),
-            ("Scheme Disc", "spd_amount"),
-            ("Festival Disc", "festival_amount"),
-            ("Special Disc", "scd_amount"),
-            ("Cash Disc", "cd_amount")
-        ]
-        has_disc = False
-        for label, key in discs:
-            val = float(order_header.get(key) or 0)
-            if val > 0:
-                has_disc = True
-                breakdown_data.append([Paragraph(f"<b>{label}:</b>", self.styles['RightAlign']), f"(-) {val:,.2f}"])
-        
-        taxable = float(order_header.get("total_amount") or 0)
+        disc_amt = float(order_header.get("discount_amount") or 0)
+        disc_p = float(order_header.get("discount_percent") or 0)
+        if disc_amt > 0 or disc_p > 0:
+            breakdown_data.append([Paragraph(f"<b>Discount ({disc_p:g}%):</b>", self.styles['RightAlign']), f"(-) {disc_amt:,.2f}"])
+            
+        taxable = float(order_header.get("total_amount") or order_header.get("taxable_amount") or (gross - disc_amt))
+        if disc_amt > 0:
+            breakdown_data.append([Paragraph("<b>Taxable Value:</b>", self.styles['RightAlign']), f"{taxable:,.2f}"])
+            
+        tax_type = str(order_header.get("tax_type") or "GST").upper()
+        tax_per = float(order_header.get("tax_per") or 0)
         cgst = float(order_header.get("cgst_amount") or 0)
         sgst = float(order_header.get("sgst_amount") or 0)
         igst = float(order_header.get("igst_amount") or 0)
+        gst_tot = float(order_header.get("gst_amount") or 0)
+        
+        if tax_per > 0 and taxable > 0:
+            val = round(taxable * (tax_per / 100), 2)
+        else:
+            val = gst_tot if gst_tot > 0 else (cgst + sgst + igst)
+            
+        if tax_type == "GST":
+            if val > 0 or tax_per > 0:
+                label = f"<b>GST ({tax_per:g}%):</b>" if tax_per > 0 else "<b>GST:</b>"
+                breakdown_data.append([Paragraph(label, self.styles['RightAlign']), f"{val:,.2f}"])
+        else: # IGST
+            if val > 0 or tax_per > 0:
+                label = f"<b>IGST ({tax_per:g}%):</b>" if tax_per > 0 else "<b>IGST:</b>"
+                breakdown_data.append([Paragraph(label, self.styles['RightAlign']), f"{val:,.2f}"])
+                
         cess = float(order_header.get("cess_amount") or 0)
         tcs = float(order_header.get("tcs_amount") or 0)
-        
-        if has_disc or cgst > 0 or sgst > 0 or igst > 0 or cess > 0 or tcs > 0:
-            breakdown_data.append([Paragraph("<b>Taxable Value:</b>", self.styles['RightAlign']), f"{taxable:,.2f}"])
-            
-        if cgst > 0: breakdown_data.append([Paragraph("<b>CGST:</b>", self.styles['RightAlign']), f"{cgst:,.2f}"])
-        if sgst > 0: breakdown_data.append([Paragraph("<b>SGST:</b>", self.styles['RightAlign']), f"{sgst:,.2f}"])
-        if igst > 0: breakdown_data.append([Paragraph("<b>IGST:</b>", self.styles['RightAlign']), f"{igst:,.2f}"])
         if cess > 0: breakdown_data.append([Paragraph("<b>CESS:</b>", self.styles['RightAlign']), f"{cess:,.2f}"])
         if tcs > 0:  breakdown_data.append([Paragraph("<b>TCS:</b>", self.styles['RightAlign']), f"{tcs:,.2f}"])
         
@@ -626,18 +634,19 @@ class PDFGenerator:
         footer1_t = Table(footer1_data, colWidths=[PAGE_WIDTH * 0.6, PAGE_WIDTH * 0.4])
         footer1_t.setStyle([
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
             ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
         ])
 
         # 5. Footer2: Delivery and Signature
-        remarks = str(order_header.get('remarks') or "")
+        deliv = str(order_header.get('delivery_address') or order_header.get('destination') or "")
+        rem = str(order_header.get('remarks') or "")
+        deliv_text = f"<b>Delivery : </b>{deliv}" if deliv else (f"<b>Remarks : </b>{rem}" if rem else "<b>Delivery : </b>-")
+        
         footer2_data = [
-            [Paragraph(f"<b>Delivery : </b>{remarks}", self.styles['Normal']), ""],
-            ["", ""],
+            [Paragraph(deliv_text, self.styles['Normal']), ""],
             ["", Paragraph("<b>For &nbsp;&nbsp;&nbsp;" + comp_name + "</b>", self.styles['CenterBold'])],
-            ["", ""],
             ["", ""],
             ["", Paragraph("<b>Authorized signatory</b>", self.styles['CenterBold'])]
         ]
@@ -645,22 +654,10 @@ class PDFGenerator:
         footer2_t.setStyle([
             ('SPAN', (0, 0), (1, 0)),
             ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, 0), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 30),
-            ('BOTTOMPADDING', (0, -1), (-1, -1), 10),
-            ('ALIGN', (1, 2), (1, -1), 'CENTER'),
-        ])
-
-        # 6. Terms and Conditions
-        terms_text = "<u>Terms & Conditions:</u><br/><br/>1. Send the duplicate Sales Order along with bill and materials.<br/>2. Our Sales Order No and Date should appear in all your communications<br/>3. Materials supplied be as per our approved samples<br/>4. Defective materials & excess quantities will NOT be accepted.<br/>5. We reserve our right to accept / reject delayed deliveries."
-        footer3_data = [
-            [Paragraph(terms_text, self.styles['Normal'])]
-        ]
-        footer3_t = Table(footer3_data, colWidths=[PAGE_WIDTH])
-        footer3_t.setStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BOTTOMPADDING', (0, -1), (-1, -1), 6),
+            ('ALIGN', (1, 1), (1, -1), 'CENTER'),
         ])
 
         # Master Table
@@ -668,13 +665,9 @@ class PDFGenerator:
             [header_t],
             [party_t],
             [item_t],
-        ]
-            
-        master_data.extend([
             [footer1_t],
-            [footer2_t],
-            [footer3_t]
-        ])
+            [footer2_t]
+        ]
         
         master_t = Table(master_data, colWidths=[PAGE_WIDTH])
         master_t.setStyle([
@@ -827,10 +820,10 @@ class PDFGenerator:
         doc.build(elements)
         return filepath
 
-    def generate_cheque(self, payee_name, amount, date_str, ref_no=""):
+    def generate_cheque(self, payee_name, amount, date_str, ref_no="", company_data={}, bank_data={}):
         """
-        Generate a cheque PDF on standard Indian bank cheque size (8 x 3.5 inches).
-        Positions are calibrated for common Indian bank cheque formats.
+        Generate a professional bank cheque PDF (8 x 3.5 inches).
+        Includes Company details, Bank details, A/C Payee stamp, Date grid, Amount box, and MICR line.
         """
         cheque_width = 8 * inch
         cheque_height = 3.5 * inch
@@ -840,35 +833,121 @@ class PDFGenerator:
         
         c = canvas.Canvas(filepath, pagesize=(cheque_width, cheque_height))
         
-        # === A/C PAYEE crossing lines (top-left) ===
+        # 1. Outer Border & Frame
+        c.setLineWidth(1)
+        c.setStrokeColor(colors.HexColor("#1E3A8A")) # Deep Navy Blue
+        c.rect(0.12 * inch, 0.12 * inch, cheque_width - 0.24 * inch, cheque_height - 0.24 * inch)
+        c.setLineWidth(0.5)
+        c.rect(0.15 * inch, 0.15 * inch, cheque_width - 0.3 * inch, cheque_height - 0.3 * inch)
+
+        # 2. Company & Bank Header Box (Top Banner)
+        comp_name = str(company_data.get("name") or "YOUR COMPANY NAME").upper()
+        comp_addr = str(company_data.get("address") or "")
+        comp_city = str(company_data.get("city") or "")
+        comp_gst = str(company_data.get("gst_details") or "").replace("GSTIN:", "").strip()
+        comp_mob = str(company_data.get("mobile") or company_data.get("phone") or "").strip()
+
+        bank_name = str(bank_data.get("name") or bank_data.get("bank_name") or "STATE BANK OF INDIA").upper()
+        bank_branch = str(bank_data.get("branch") or "MAIN BRANCH")
+        bank_ifsc = str(bank_data.get("ifsc_code") or bank_data.get("ifsc") or "")
+        acc_no = str(bank_data.get("account_no") or "")
+
+        # Top Header Background Tint
+        c.setFillColor(colors.HexColor("#F8FAFC"))
+        c.rect(0.15 * inch, cheque_height - 0.85 * inch, cheque_width - 0.3 * inch, 0.7 * inch, fill=1, stroke=0)
+        c.setStrokeColor(colors.HexColor("#CBD5E1"))
+        c.line(0.15 * inch, cheque_height - 0.85 * inch, cheque_width - 0.15 * inch, cheque_height - 0.85 * inch)
+
+        # 3. A/C PAYEE ONLY Crossing Stamp (Top Left)
+        c.setStrokeColor(colors.HexColor("#000000"))
+        c.setLineWidth(1)
+        c.line(0.25 * inch, cheque_height - 0.22 * inch, 1.35 * inch, cheque_height - 0.22 * inch)
+        c.line(0.25 * inch, cheque_height - 0.38 * inch, 1.35 * inch, cheque_height - 0.38 * inch)
+        c.setFont("Helvetica-Bold", 7)
+        c.setFillColor(colors.black)
+        c.drawCentredString(0.80 * inch, cheque_height - 0.32 * inch, "A/C PAYEE ONLY")
+
+        # Draw Company Name & Subtext (Left Header - Indented to clear A/C Payee stamp)
+        c.setFillColor(colors.HexColor("#1E1B4B"))
         c.setFont("Helvetica-Bold", 10)
-        c.line(0.3 * inch, 3.15 * inch, 1.9 * inch, 3.15 * inch)
-        c.drawString(0.5 * inch, 3.2 * inch, "A/C PAYEE ONLY")
-        c.line(0.3 * inch, 3.35 * inch, 1.9 * inch, 3.35 * inch)
+        c.drawString(1.45 * inch, cheque_height - 0.35 * inch, comp_name[:32])
         
-        # === Date (top-right) — spaced digits for DD MM YYYY boxes ===
-        c.setFont("Helvetica-Bold", 12)
+        c.setFont("Helvetica", 7)
+        c.setFillColor(colors.HexColor("#475569"))
+        sub_parts = [p for p in [comp_addr, comp_city] if p]
+        sub_info = ", ".join(sub_parts)
+        if comp_gst: sub_info += f" | GST: {comp_gst}"
+        c.drawString(1.45 * inch, cheque_height - 0.48 * inch, sub_info[:36])
+
+        # Draw Bank Info (Center-Right Header)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.setFillColor(colors.HexColor("#1E3A8A"))
+        c.drawRightString(cheque_width - 2.15 * inch, cheque_height - 0.35 * inch, bank_name[:25])
+        c.setFont("Helvetica", 7)
+        c.setFillColor(colors.HexColor("#475569"))
+        b_sub = bank_branch
+        if bank_ifsc: b_sub += f" ({bank_ifsc})"
+        c.drawRightString(cheque_width - 2.15 * inch, cheque_height - 0.48 * inch, b_sub[:30])
+        if acc_no:
+            c.setFont("Helvetica-Bold", 7)
+            c.drawRightString(cheque_width - 2.15 * inch, cheque_height - 0.60 * inch, f"A/C: {acc_no}")
+
+        # 4. DATE Boxes (Top Right Grid)
+        c.setFont("Helvetica-Bold", 8)
+        c.setFillColor(colors.HexColor("#1E3A8A"))
+        c.drawString(cheque_width - 2.05 * inch, cheque_height - 0.35 * inch, "DATE:")
+        
+        # Format Date string into 8 digits
+        date_digits = [" "] * 8
         try:
-            parts = str(date_str).split('-')
-            if len(parts) == 3:
-                # ISO format YYYY-MM-DD
-                yy, mm, dd = parts[0], parts[1], parts[2]
-                date_display = f"{dd[0]}  {dd[1]}  {mm[0]}  {mm[1]}  {yy[0]}  {yy[1]}  {yy[2]}  {yy[3]}"
-            else:
-                date_display = str(date_str)
+            d_parts = str(date_str).replace("/", "-").split("-")
+            if len(d_parts) == 3:
+                if len(d_parts[0]) == 4: # YYYY-MM-DD
+                    yy, mm, dd = d_parts[0], d_parts[1], d_parts[2]
+                else: # DD-MM-YYYY
+                    dd, mm, yy = d_parts[0], d_parts[1], d_parts[2]
+                d_str = f"{dd.zfill(2)}{mm.zfill(2)}{yy.zfill(4)}"
+                date_digits = [ch for ch in d_str[:8]]
         except:
-            date_display = str(date_str)
-        c.drawString(5.5 * inch, 2.85 * inch, date_display)
+            pass
+
+        box_start_x = cheque_width - 1.7 * inch
+        box_y = cheque_height - 0.50 * inch
+        box_w = 0.16 * inch
+        box_h = 0.20 * inch
         
-        # === Pay / Payee Name (middle-left) ===
-        c.setFont("Helvetica", 9)
-        c.drawString(0.4 * inch, 2.3 * inch, "Pay")
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(0.8 * inch, 2.3 * inch, str(payee_name).upper())
+        c.setLineWidth(0.7)
+        c.setStrokeColor(colors.HexColor("#1E3A8A"))
+        c.setFont("Helvetica-Bold", 10)
         
-        # === Amount in Words (below payee, two lines if needed) ===
-        c.setFont("Helvetica", 9)
-        c.drawString(0.4 * inch, 1.85 * inch, "Rupees")
+        for i, digit in enumerate(date_digits):
+            bx = box_start_x + (i * 0.18 * inch)
+            c.rect(bx, box_y, box_w, box_h)
+            c.setFillColor(colors.black)
+            c.drawCentredString(bx + box_w/2.0, box_y + 0.04 * inch, digit)
+
+        # 5. PAY Line
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(colors.HexColor("#1E3A8A"))
+        c.drawString(0.3 * inch, 2.15 * inch, "PAY")
+        
+        c.setFont("Helvetica-Bold", 12)
+        c.setFillColor(colors.black)
+        payee_str = str(payee_name).upper()
+        c.drawString(0.8 * inch, 2.15 * inch, payee_str)
+        c.setFont("Helvetica", 8)
+        c.setFillColor(colors.HexColor("#64748B"))
+        c.drawRightString(cheque_width - 0.3 * inch, 2.15 * inch, "OR ORDER")
+        
+        c.setLineWidth(0.5)
+        c.setStrokeColor(colors.HexColor("#CBD5E1"))
+        c.line(0.8 * inch, 2.08 * inch, cheque_width - 0.3 * inch, 2.08 * inch)
+
+        # 6. RUPEES Line
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColor(colors.HexColor("#1E3A8A"))
+        c.drawString(0.3 * inch, 1.65 * inch, "RUPEES")
+        
         try:
             amt_float = float(amount)
             amt_words = num2words(int(amt_float), lang='en_IN').title()
@@ -878,24 +957,60 @@ class PDFGenerator:
             amt_words += " Only"
         except:
             amt_words = "Zero Only"
+
+        c.setFont("Helvetica-Bold", 10.5)
+        c.setFillColor(colors.black)
         
-        c.setFont("Helvetica-Bold", 11)
-        # Split long amount text across two lines if needed
-        if len(amt_words) > 55:
-            c.drawString(1.0 * inch, 1.85 * inch, amt_words[:55])
-            c.drawString(0.4 * inch, 1.55 * inch, amt_words[55:])
+        if len(amt_words) > 50:
+            c.drawString(1.0 * inch, 1.65 * inch, amt_words[:50])
+            c.line(1.0 * inch, 1.58 * inch, cheque_width - 2.2 * inch, 1.58 * inch)
+            
+            c.drawString(0.3 * inch, 1.30 * inch, amt_words[50:])
+            c.line(0.3 * inch, 1.23 * inch, cheque_width - 2.2 * inch, 1.23 * inch)
         else:
-            c.drawString(1.0 * inch, 1.85 * inch, amt_words)
+            c.drawString(1.0 * inch, 1.65 * inch, amt_words)
+            c.line(1.0 * inch, 1.58 * inch, cheque_width - 2.2 * inch, 1.58 * inch)
+
+        # 7. AMOUNT Box (Right Side)
+        amt_box_x = cheque_width - 2.1 * inch
+        amt_box_y = 1.35 * inch
+        amt_box_w = 1.8 * inch
+        amt_box_h = 0.38 * inch
+
+        c.setFillColor(colors.HexColor("#F1F5F9"))
+        c.rect(amt_box_x, amt_box_y, amt_box_w, amt_box_h, fill=1, stroke=0)
+        c.setLineWidth(1)
+        c.setStrokeColor(colors.HexColor("#1E3A8A"))
+        c.rect(amt_box_x, amt_box_y, amt_box_w, amt_box_h, fill=0, stroke=1)
         
-        # === Amount in Figures (right side box) ===
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(6.0 * inch, 1.85 * inch, f"Rs. {float(amount):,.2f} /-")
-        
-        # === Reference/Voucher No (bottom-left, small) ===
+        c.setFont("Helvetica-Bold", 13)
+        c.setFillColor(colors.HexColor("#0F172A"))
+        c.drawString(amt_box_x + 0.1 * inch, amt_box_y + 0.12 * inch, "Rs.")
+        c.drawRightString(amt_box_x + amt_box_w - 0.1 * inch, amt_box_y + 0.12 * inch, f"{float(amount):,.2f} /-")
+
+        # 8. Signature Block (Bottom Right)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.setFillColor(colors.HexColor("#1E3A8A"))
+        c.drawRightString(cheque_width - 0.3 * inch, 0.95 * inch, f"For {comp_name}")
+
+        c.setFont("Helvetica", 7.5)
+        c.setFillColor(colors.HexColor("#64748B"))
+        c.drawRightString(cheque_width - 0.3 * inch, 0.40 * inch, "Authorized Signatory")
+
+        # 9. Reference / Voucher No (Bottom Left)
         if ref_no:
             c.setFont("Helvetica", 8)
-            c.drawString(0.4 * inch, 0.6 * inch, f"Ref: {ref_no}")
-        
+            c.setFillColor(colors.HexColor("#475569"))
+            c.drawString(0.3 * inch, 0.45 * inch, f"Chq/Ref No: {ref_no}")
+
+        # 10. MICR Band at Bottom Center
+        c.setFillColor(colors.HexColor("#F8FAFC"))
+        c.rect(0.15 * inch, 0.15 * inch, cheque_width - 0.3 * inch, 0.22 * inch, fill=1, stroke=0)
+        c.setFont("Courier-Bold", 9)
+        c.setFillColor(colors.HexColor("#334155"))
+        micr_code = f"||' {ref_no or '123456'} ||'  600024002|:  000123||'  10"
+        c.drawCentredString(cheque_width / 2.0, 0.20 * inch, micr_code)
+
         c.showPage()
         c.save()
         return filepath

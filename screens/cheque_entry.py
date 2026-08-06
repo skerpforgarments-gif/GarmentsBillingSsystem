@@ -14,6 +14,23 @@ def _snack(page, msg, color="green"):
         page.update()
 
 
+def _close_dialog(page, dlg):
+    if dlg:
+        dlg.open = False
+    if page:
+        page.update()
+
+
+def _format_ts(ts):
+    if not ts: return "-"
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(str(ts).replace('Z', '+00:00'))
+        return dt.strftime("%b %d, %Y %I:%M %p")
+    except:
+        return str(ts)[:16]
+
+
 class ChequeEntryScreen(ft.Container):
     TABLE = "cheque_entries"
 
@@ -42,6 +59,8 @@ class ChequeEntryScreen(ft.Container):
                 ft.IconButton(ft.icons.SKIP_PREVIOUS_ROUNDED, on_click=self._prev, tooltip="Previous", icon_color=AppColors.PRIMARY),
                 ft.IconButton(ft.icons.SKIP_NEXT_ROUNDED, on_click=self._next, tooltip="Next", icon_color=AppColors.PRIMARY),
                 ft.VerticalDivider(width=1, color="#CBD5E1"),
+                ft.ElevatedButton("History", icon=ft.icons.HISTORY, on_click=self._history,
+                                  style=ft.ButtonStyle(bgcolor="#3B82F6", color="white", shape=ft.RoundedRectangleBorder(radius=6))),
                 ft.ElevatedButton("Print", icon=ft.icons.PRINT, on_click=self._print,
                                   style=ft.ButtonStyle(bgcolor="#8B5CF6", color="white", shape=ft.RoundedRectangleBorder(radius=6))),
             ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
@@ -288,13 +307,146 @@ class ChequeEntryScreen(ft.Container):
 
     def _print(self, e):
         try:
+            bank_data = {}
+            if self.bank_dd.value:
+                b_recs = select("banks", {"id": self.bank_dd.value})
+                if b_recs: bank_data = b_recs[0]
+
+            comp_data = state.current_company or {}
+            if not comp_data.get("address") and state.company_id:
+                c_recs = select("companies", {"id": state.company_id})
+                if c_recs: comp_data = c_recs[0]
+
             path = pdf_engine.generate_cheque(
                 self.payee_name.value,
                 float(self.amount.value or 0),
                 self.cheque_date.value,
                 ref_no=self.cheque_no.value,
+                company_data=comp_data,
+                bank_data=bank_data,
             )
             print_pdf(path)
             _snack(self.page, "Cheque PDF Generated")
         except Exception as ex:
             _snack(self.page, f"Print Error: {ex}", "red")
+
+    def _history(self, e):
+        recs = select(self.TABLE, {"company_id": state.company_id})
+        recs.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+
+        banks = select("banks", {"company_id": state.company_id})
+        bank_map = {str(b["id"]): b["name"] for b in banks}
+
+        lv = ft.ListView(expand=1, spacing=10, padding=10)
+        if not recs:
+            lv.controls.append(ft.Container(content=ft.Text("No Cheque Entries found", color=AppColors.TEXT_MUTED), padding=20))
+
+        for r in recs:
+            r_id = str(r["id"])
+            doc_no = f"Entry #{r.get('entry_no', '-')}"
+            chq_no = r.get("cheque_no") or "-"
+            entry_date = r.get("entry_date", "-")
+            created_at = _format_ts(r.get("created_at"))
+            payee = r.get("payee_name") or "-"
+            bank_name = bank_map.get(str(r.get("bank_id")), "Bank")
+            amount = float(r.get("amount") or 0)
+
+            lv.controls.append(
+                ft.Container(
+                    padding=12,
+                    bgcolor=ft.colors.WHITE,
+                    border_radius=8,
+                    border=ft.border.all(1, "#E2E8F0"),
+                    shadow=ft.BoxShadow(blur_radius=4, color="#0A000000"),
+                    content=ft.Row([
+                        ft.Column([
+                            ft.Row([
+                                ft.Text(doc_no, weight="bold", size=14, color=AppColors.TEXT_HEADER),
+                                ft.Text(f"(Chq No: {chq_no})", size=12, color=AppColors.TEXT_MUTED, weight="w500"),
+                            ], spacing=8),
+                            ft.Row([
+                                ft.Icon(ft.icons.CALENDAR_TODAY, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(entry_date, size=11, color=ft.colors.BLUE_GREY_600),
+                                ft.VerticalDivider(width=10),
+                                ft.Icon(ft.icons.ACCESS_TIME, size=12, color=ft.colors.BLUE_GREY_400),
+                                ft.Text(created_at, size=11, color=ft.colors.BLUE_GREY_600),
+                            ], spacing=5),
+                            ft.Text(f"Pay: {payee} | Bank: {bank_name}", size=13, weight="w500", color=AppColors.PRIMARY),
+                        ], expand=True, spacing=4),
+                        ft.Column([
+                            ft.Text(f"₹ {amount:,.2f}", size=16, weight="bold", color=ft.colors.GREEN_700),
+                        ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=2),
+                        ft.Row([
+                            ft.IconButton(ft.icons.EDIT_OUTLINED, tooltip="Edit Cheque", icon_color=AppColors.PRIMARY,
+                                          on_click=lambda e, rid=r_id: self._load_from_history(rid, dlg)),
+                            ft.IconButton(ft.icons.PRINT, tooltip="Print Cheque", icon_color=ft.colors.BLUE_700,
+                                          on_click=lambda e, rec=r: self._print_history(rec)),
+                            ft.IconButton(ft.icons.DELETE_OUTLINE, tooltip="Delete Cheque", icon_color="red",
+                                          on_click=lambda e, rec=r: self._delete_from_history(rec, dlg))
+                        ], spacing=4)
+                    ])
+                )
+            )
+
+        dlg = ft.AlertDialog(
+            title=ft.Text("Recent Cheque Entries"),
+            content=ft.Container(width=650, height=450, content=lv),
+            actions=[ft.TextButton("Close", on_click=lambda e: _close_dialog(self.page, dlg))]
+        )
+        self.page.overlay.append(dlg)
+        dlg.open = True
+        self.page.update()
+
+    def _load_from_history(self, rec_id, dlg):
+        _close_dialog(self.page, dlg)
+        self._load_record(rec_id)
+
+    def _print_history(self, record):
+        try:
+            bank_data = {}
+            if record.get("bank_id"):
+                b_recs = select("banks", {"id": record["bank_id"]})
+                if b_recs: bank_data = b_recs[0]
+
+            comp_data = state.current_company or {}
+            if not comp_data.get("address") and state.company_id:
+                c_recs = select("companies", {"id": state.company_id})
+                if c_recs: comp_data = c_recs[0]
+
+            path = pdf_engine.generate_cheque(
+                record.get("payee_name", ""),
+                float(record.get("amount") or 0),
+                record.get("cheque_date", ""),
+                ref_no=record.get("cheque_no", ""),
+                company_data=comp_data,
+                bank_data=bank_data,
+            )
+            print_pdf(path)
+            _snack(self.page, "Cheque PDF Generated")
+        except Exception as ex:
+            _snack(self.page, f"Print Error: {ex}", "red")
+
+    def _delete_from_history(self, record, dlg):
+        def confirm_del(e):
+            try:
+                rec_id = str(record["id"])
+                delete(self.TABLE, {"id": rec_id})
+                _close_dialog(self.page, confirm_dlg)
+                _close_dialog(self.page, dlg)
+                self._load_list()
+                self._new(None)
+                _snack(self.page, f"Cheque Entry #{record.get('entry_no')} deleted successfully", "green")
+            except Exception as ex:
+                _snack(self.page, f"Delete Error: {ex}", "red")
+
+        confirm_dlg = ft.AlertDialog(
+            title=ft.Text("Confirm Delete"),
+            content=ft.Text(f"Are you sure you want to delete Cheque Entry #{record.get('entry_no')}? This cannot be undone."),
+            actions=[
+                ft.TextButton("Yes, Delete", on_click=confirm_del, style=ft.ButtonStyle(color="red")),
+                ft.TextButton("Cancel", on_click=lambda e: _close_dialog(self.page, confirm_dlg))
+            ]
+        )
+        self.page.overlay.append(confirm_dlg)
+        confirm_dlg.open = True
+        self.page.update()
