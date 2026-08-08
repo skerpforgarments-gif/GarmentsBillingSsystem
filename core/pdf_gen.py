@@ -15,52 +15,96 @@ from datetime import date
 def format_inr(number):
     return f"INR {number:,.2f}"
 
-def print_pdf(pdf_path):
+def print_pdf(pdf_path, page=None):
     """
-    Send a PDF directly to the system default printer, then delete
-    the temp file after a short delay to allow the print spooler to read it.
+    Send or view a PDF directly.
+    Supports both Web mode (opens PDF in browser tab & shows printable notification)
+    and Desktop mode (opens in native PDF viewer / spooler).
     """
-    try:
-        if os.name == 'nt':
-            os.startfile(pdf_path, "print")
-        else:
-            import subprocess
-            subprocess.run(["lp", pdf_path], check=True)
-    except Exception:
-        # Fallback: open normally so user can print via viewer
-        if hasattr(os, "startfile"):
-            os.startfile(pdf_path)
+    import flet as ft
+    if not page:
+        from core.state import state
+        page = getattr(state, "page", None)
 
-    # Clean up the temp file after a delay (give print spooler time)
-    def _cleanup():
-        time.sleep(15)
+    filename = os.path.basename(pdf_path)
+    web_url = f"/pdfs/{filename}"
+
+    # Sync PDF to both assets/pdfs (for Web serving) and root pdfs/ (for Desktop/local)
+    try:
+        assets_dir = os.path.join(os.getcwd(), "assets", "pdfs")
+        os.makedirs(assets_dir, exist_ok=True)
+        asset_target = os.path.join(assets_dir, filename)
+        if pdf_path != asset_target and os.path.exists(pdf_path):
+            import shutil
+            shutil.copy2(pdf_path, asset_target)
+
+        legacy_dir = os.path.join(os.getcwd(), "pdfs")
+        os.makedirs(legacy_dir, exist_ok=True)
+        legacy_target = os.path.join(legacy_dir, filename)
+        if pdf_path != legacy_target and os.path.exists(pdf_path):
+            import shutil
+            shutil.copy2(pdf_path, legacy_target)
+    except Exception as ex:
+        print(f"[PDF Sync Error] {ex}")
+
+    opened_in_web = False
+    if page:
         try:
-            os.remove(pdf_path)
-        except:
-            pass
-    threading.Thread(target=_cleanup, daemon=True).start()
+            # 1. Trigger browser launch_url
+            page.launch_url(web_url)
+            opened_in_web = True
+
+            # 2. Display persistent SnackBar with explicit button to open/print PDF
+            page.snack_bar = ft.SnackBar(
+                content=ft.Row([
+                    ft.Icon(ft.icons.PICTURE_AS_PDF, color="white"),
+                    ft.Text(f"PDF Generated: {filename}", color="white", weight="bold"),
+                ], spacing=10),
+                action="OPEN / PRINT PDF",
+                action_color="#FEF08A",  # Pastel Yellow
+                on_action=lambda e: page.launch_url(web_url),
+                duration=12000,
+                bgcolor="#166534"  # Forest Green
+            )
+            page.snack_bar.open = True
+            page.update()
+        except Exception as ex:
+            print(f"[PDF Web Launch Error] {ex}")
+
+    if not opened_in_web:
+        try:
+            if os.name == 'nt':
+                os.startfile(pdf_path)
+            else:
+                import subprocess
+                subprocess.run(["xdg-open", pdf_path], check=False)
+        except Exception as ex:
+            print(f"[PDF Native Desktop Error] {ex}")
+
 
 class PDFGenerator:
     def __init__(self):
-        self.output_dir = os.path.join(os.getcwd(), "pdfs")
+        self.output_dir = os.path.join(os.getcwd(), "assets", "pdfs")
         os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(os.path.join(os.getcwd(), "pdfs"), exist_ok=True)
         self._cleanup_old_pdfs()
         
         self.styles = getSampleStyleSheet()
         self._setup_custom_styles()
 
     def _cleanup_old_pdfs(self):
-        """Silently deletes any PDF file in the pdfs folder older than 24 hours."""
-        try:
-            current_time = time.time()
-            for filename in os.listdir(self.output_dir):
-                if filename.endswith(".pdf"):
-                    filepath = os.path.join(self.output_dir, filename)
-                    # If file is older than 24 hours (86400 seconds)
-                    if os.path.isfile(filepath) and (current_time - os.path.getmtime(filepath)) > 86400:
-                        os.remove(filepath)
-        except Exception as e:
-            print(f"Cleanup error: {e}")
+        """Silently deletes any PDF file in assets/pdfs and pdfs folders older than 24 hours."""
+        current_time = time.time()
+        for folder in [self.output_dir, os.path.join(os.getcwd(), "pdfs")]:
+            try:
+                if os.path.exists(folder):
+                    for filename in os.listdir(folder):
+                        if filename.endswith(".pdf"):
+                            filepath = os.path.join(folder, filename)
+                            if os.path.isfile(filepath) and (current_time - os.path.getmtime(filepath)) > 86400:
+                                os.remove(filepath)
+            except Exception as e:
+                print(f"Cleanup error: {e}")
 
     def _setup_custom_styles(self):
         self.styles.add(ParagraphStyle(
