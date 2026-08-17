@@ -251,10 +251,8 @@ class YarnPOScreen(ft.Container):
     def did_mount(self):
         self._load_metadata()
         self._load_list()
-        if not self.all_ids:
-            self._new(None)
-        else:
-            self._load_record(self.all_ids[-1])
+        self._new(None)
+        self._history(None)
 
     def _load_metadata(self):
         if not state.company_id: return
@@ -626,8 +624,8 @@ class KnittingProgramScreen(ft.Container):
     def did_mount(self):
         self._load_metadata()
         self._load_list()
-        if not self.all_ids: self._new(None)
-        else: self._load_record(self.all_ids[-1])
+        self._new(None)
+        self._history(None)
 
     def _load_metadata(self):
         if not state.company_id: return
@@ -881,10 +879,10 @@ class DyeingProgramScreen(ft.Container):
             bgcolor="#FEF9C3", padding=ft.padding.symmetric(horizontal=4, vertical=6),
             border=ft.border.all(1, "#E2E8F0"),
             content=ft.Row([
-                ft.Text("S.No", width=40, **hdr_style), ft.Text("Item", width=220, **hdr_style),
-                ft.Text("Colour", width=180, **hdr_style), ft.Text("Process", width=180, **hdr_style),
-                ft.Text("Weight (Kgs)", width=120, **hdr_style), ft.Text("Batch", width=120, **hdr_style),
-                ft.Text("", width=40),
+                ft.Text("S.No", width=40, **hdr_style), ft.Text("Item", width=200, **hdr_style),
+                ft.Text("Colour", width=160, **hdr_style), ft.Text("Process", width=160, **hdr_style),
+                ft.Text("Dia", width=80, **hdr_style), ft.Text("Weight (Kgs)", width=110, **hdr_style),
+                ft.Text("Batch", width=110, **hdr_style), ft.Text("", width=40),
             ], spacing=4)
         )
         self.grid_body = ft.Column(spacing=2, scroll=ft.ScrollMode.AUTO, expand=True)
@@ -914,11 +912,12 @@ class DyeingProgramScreen(ft.Container):
         sno = len(self.rows) + 1
         d = data or {}
         ctrls = {
-            "item":    ft.TextField(value=d.get("item_name", ""), width=220, **S),
-            "colour":  ft.TextField(value=d.get("colour", ""), width=180, **S),
-            "process": ft.TextField(value=d.get("process", ""), width=180, **S),
-            "weight":  ft.TextField(value=str(d.get("weight_kgs", "")), width=120, **S),
-            "batch":   ft.TextField(value=d.get("batch", ""), width=120, **S),
+            "item":    ft.TextField(value=d.get("item_name", ""), width=200, **S),
+            "colour":  ft.TextField(value=d.get("colour", ""), width=160, **S),
+            "process": ft.TextField(value=d.get("process", ""), width=160, **S),
+            "dia":     ft.TextField(value=d.get("dia", ""), width=80, **S),
+            "weight":  ft.TextField(value=str(d.get("weight_kgs", "") or d.get("weight", "")), width=110, **S),
+            "batch":   ft.TextField(value=d.get("batch", ""), width=110, **S),
         }
         sno_text = ft.Text(str(sno), width=40, text_align=ft.TextAlign.CENTER, size=12)
         del_btn = ft.IconButton(ft.icons.CLOSE, icon_size=16, icon_color="#EF4444",
@@ -927,7 +926,7 @@ class DyeingProgramScreen(ft.Container):
             padding=ft.padding.symmetric(horizontal=4, vertical=2),
             bgcolor="#FFFFF0" if sno % 2 == 0 else "white",
             content=ft.Row([sno_text, ctrls["item"], ctrls["colour"], ctrls["process"],
-                            ctrls["weight"], ctrls["batch"], del_btn], spacing=4)
+                            ctrls["dia"], ctrls["weight"], ctrls["batch"], del_btn], spacing=4)
         )
         ctrls["_widget"] = row_widget
         ctrls["_sno"] = sno_text
@@ -955,8 +954,8 @@ class DyeingProgramScreen(ft.Container):
     def did_mount(self):
         self._load_metadata()
         self._load_list()
-        if not self.all_ids: self._new(None)
-        else: self._load_record(self.all_ids[-1])
+        self._new(None)
+        self._history(None)
 
     def _load_metadata(self):
         if not state.company_id: return
@@ -1002,8 +1001,8 @@ class DyeingProgramScreen(ft.Container):
                 insert(self.ITEMS_TABLE, {
                     "company_id": state.company_id, "program_id": rec_id, "s_no": i,
                     "item_name": r["item"].value, "colour": r["colour"].value,
-                    "process": r["process"].value, "weight_kgs": float(r["weight"].value or 0),
-                    "batch": r["batch"].value,
+                    "process": r["process"].value, "dia": r["dia"].value,
+                    "weight_kgs": float(r["weight"].value or 0), "batch": r["batch"].value,
                 })
             self._load_list()
             _snack(self.page, "Dyeing Program Saved!")
@@ -1050,7 +1049,7 @@ class DyeingProgramScreen(ft.Container):
 
     def _print(self, e):
         items = [{"item_name": r["item"].value, "colour": r["colour"].value, "process": r["process"].value,
-                  "weight": r["weight"].value, "batch": r["batch"].value}
+                  "dia": r["dia"].value, "weight": r["weight"].value, "batch": r["batch"].value}
                  for r in self.rows if r["item"].value]
         header = {"prog_no": self.doc_no.value, "prog_date": self.doc_date.value,
                   "party_name": next((o.text for o in self.party_dd.options if o.key == self.party_dd.value), ""),

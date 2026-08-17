@@ -112,18 +112,17 @@ class PartyMasterForm(ft.Stack):
             label="Tax Slab", width=220, on_change=self.on_tax_change, **self.style_args
         )
         self.tax_details = ft.Text("", size=11, italic=True, color=AppColors.TEXT_SUB)
-        self.gst_percent = ft.TextField(label="Total Rate %", width=100, value="0",
-                                          on_change=self.on_gst_pct_change,
+        self.gst_percent = ft.TextField(label="Total Rate %", width=100, value="0", read_only=True,
                                           keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.cgst_percent = ft.TextField(label="CGST %", width=80, value="0",
+        self.cgst_percent = ft.TextField(label="CGST %", width=80, value="0", read_only=True,
                                           keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.sgst_percent = ft.TextField(label="SGST %", width=80, value="0",
+        self.sgst_percent = ft.TextField(label="SGST %", width=80, value="0", read_only=True,
                                           keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.igst_percent = ft.TextField(label="IGST %", width=80, value="0",
+        self.igst_percent = ft.TextField(label="IGST %", width=80, value="0", read_only=True,
                                           keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.tcs_percent = ft.TextField(label="TCS %", width=80, value="0",
+        self.tcs_percent = ft.TextField(label="TCS %", width=80, value="0", read_only=True,
                                          keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
-        self.cess_percent = ft.TextField(label="CESS %", width=80, value="0",
+        self.cess_percent = ft.TextField(label="CESS %", width=80, value="0", read_only=True,
                                           keyboard_type=ft.KeyboardType.NUMBER, **self.style_args)
         
         self.tcs_applicable = ft.Checkbox(label="TCS Appl.", value=False, check_color=AppColors.PRIMARY)

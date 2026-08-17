@@ -35,8 +35,8 @@ class OrderEntryTab(ft.Column):
         S = AppStyles.get_input_style()
 
         # ── Header controls ───────────────────────────────────
-        self.order_no   = ft.TextField(label="Order No", width=120, **S)
-        self.order_date = ft.TextField(label="Order Date", width=140, **S)
+        self.order_no   = ft.TextField(label="Invoice No", width=130, **S)
+        self.order_date = ft.TextField(label="Invoice Date", width=140, **S)
 
         self.party_dd       = ft.Dropdown(label="Select Party *", options=[], on_change=self.on_party_change, width=260, **S)
         self.agent_dd       = ft.Dropdown(label="Agent", width=160, **S)
@@ -108,6 +108,13 @@ class OrderEntryTab(ft.Column):
         self.round_off    = ft.TextField(label="Round Off", value="0.00", width=90, on_change=self.on_calc_change, **S)
         self.gross_amount = ft.Text("₹0.00", size=26, weight="bold", color=AppColors.PRIMARY)
 
+        # Item Search
+        self.item_search_tf = ft.TextField(
+            hint_text="Search Item...", prefix_icon=ft.icons.SEARCH, width=200,
+            content_padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            on_change=lambda e: self._refresh_left_panel(), **S
+        )
+
         # ── Two-panel split containers ─────────────────────────
         self.left_panel  = ft.Column(scroll=ft.ScrollMode.AUTO, spacing=6)
         self.right_panel = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True, spacing=0)
@@ -124,8 +131,6 @@ class OrderEntryTab(ft.Column):
             ft.Divider(height=1, color="#E2E8F0"),
             self._build_footer(),
         ]
-
-
 
     def _build_header(self):
         """3-row always-visible header + action bar."""
@@ -149,11 +154,22 @@ class OrderEntryTab(ft.Column):
                     style=ft.ButtonStyle(color=AppColors.DANGER, padding=ft.padding.symmetric(horizontal=14, vertical=10))
                 ),
                 ft.ElevatedButton(
-                    "Save Order", icon=ft.icons.SAVE_ALT_ROUNDED,
+                    "Save", icon=ft.icons.SAVE_ROUNDED,
                     on_click=self.save_order,
                     style=ft.ButtonStyle(
                         color=ft.colors.WHITE,
                         bgcolor={ft.MaterialState.DEFAULT: AppColors.SUCCESS, ft.MaterialState.HOVERED: "#16A34A"},
+                        shape=ft.RoundedRectangleBorder(radius=8),
+                        elevation=2,
+                        padding=ft.padding.symmetric(horizontal=18, vertical=10),
+                    )
+                ),
+                ft.ElevatedButton(
+                    "Print (PDF)", icon=ft.icons.PRINT_ROUNDED,
+                    on_click=self.print_current_invoice,
+                    style=ft.ButtonStyle(
+                        color=ft.colors.WHITE,
+                        bgcolor={ft.MaterialState.DEFAULT: "#8B5CF6", ft.MaterialState.HOVERED: "#7C3AED"},
                         shape=ft.RoundedRectangleBorder(radius=8),
                         elevation=2,
                         padding=ft.padding.symmetric(horizontal=18, vertical=10),
@@ -167,11 +183,11 @@ class OrderEntryTab(ft.Column):
             padding=ft.padding.symmetric(horizontal=20, vertical=14),
             shadow=ft.BoxShadow(blur_radius=8, color=ft.colors.with_opacity(0.06, "black"), offset=ft.Offset(0, 2)),
             content=ft.Column([
-                # Row 1: Title + Order No/Date
+                # Row 1: Title + Invoice No/Date
                 ft.Row([
                     ft.Row([
                         ft.Icon(ft.icons.RECEIPT_LONG_ROUNDED, color=AppColors.PRIMARY, size=22),
-                        ft.Text("Order Entry", size=20, weight="bold", color=AppColors.TEXT_HEADER),
+                        ft.Text("Tax Invoice", size=20, weight="bold", color=AppColors.TEXT_HEADER),
                     ], spacing=8),
                     ft.Container(expand=True),
                     self.order_no,
@@ -626,12 +642,19 @@ class OrderEntryTab(ft.Column):
         def update_val(sz, field, e):
             item["sizes_data"][sz][field] = e.control.value
             try:
-                p = float(item["sizes_data"][sz]["pieces"] or 0)
-                r = float(item["sizes_data"][sz]["rate"] or 0)
-                pack = float(item.get("packing") or 1)
+                def safe_f(v):
+                    try: return float(str(v).strip())
+                    except: return 0.0
 
-                amt_str = str(round(p * r, 2))
-                box_str = str(round(p / pack, 2) if pack > 0 else 0)
+                p = safe_f(item["sizes_data"][sz].get("pieces", 0))
+                r = safe_f(item["sizes_data"][sz].get("rate", 0))
+                pack = safe_f(item.get("packing") or 1)
+
+                amt = p * r
+                boxes = (p / pack) if pack > 0 else 0.0
+
+                amt_str = f"{amt:.2f}"
+                box_str = f"{boxes:.2f}"
 
                 item["sizes_data"][sz]["amount"] = amt_str
                 item["sizes_data"][sz]["boxes"]  = box_str
@@ -639,28 +662,31 @@ class OrderEntryTab(ft.Column):
                 if "controls" in item["sizes_data"][sz]:
                     if "amount" in item["sizes_data"][sz]["controls"]:
                         item["sizes_data"][sz]["controls"]["amount"].value = amt_str
-                        item["sizes_data"][sz]["controls"]["amount"].update()
+                        try: item["sizes_data"][sz]["controls"]["amount"].update()
+                        except: pass
                     if "boxes" in item["sizes_data"][sz]["controls"]:
                         item["sizes_data"][sz]["controls"]["boxes"].value = box_str
-                        item["sizes_data"][sz]["controls"]["boxes"].update()
+                        try: item["sizes_data"][sz]["controls"]["boxes"].update()
+                        except: pass
 
-                tot_p = sum(float(item["sizes_data"][s]["pieces"] or 0) for s in item["sizes_data"])
+                tot_p = sum(safe_f(item["sizes_data"][s].get("pieces", 0)) for s in item["sizes_data"])
                 item["total_units"] = str(int(tot_p))
-                item["total_boxes"] = str(round(tot_p / pack, 2) if pack > 0 else 0)
+                item["total_boxes"] = f"{(tot_p / pack):.2f}" if pack > 0 else "0"
 
                 if "total_boxes_lbl" in item["controls"]:
                     item["controls"]["total_boxes_lbl"].value = item["total_boxes"]
-                    item["controls"]["total_boxes_lbl"].update()
+                    try: item["controls"]["total_boxes_lbl"].update()
+                    except: pass
                 if "total_units_lbl" in item["controls"]:
                     item["controls"]["total_units_lbl"].value = item["total_units"]
-                    item["controls"]["total_units_lbl"].update()
+                    try: item["controls"]["total_units_lbl"].update()
+                    except: pass
 
-                # Also refresh the left panel card to show updated pcs/amt
                 self._refresh_left_panel()
                 if self.page:
-                    self.left_panel.update()
-
-            except Exception:
+                    try: self.left_panel.update()
+                    except: pass
+            except Exception as ex:
                 pass
             self.update_totals()
 
@@ -968,35 +994,39 @@ class OrderEntryTab(ft.Column):
         total_pcs = 0
         total_boxes = 0
         base_sum = 0
+
+        def safe_f(v):
+            try: return float(str(v).strip())
+            except: return 0.0
         
         for item in self.order_items:
             for sz in item["sizes_data"]:
-                p = float(item["sizes_data"][sz]["pieces"] or 0)
-                r = float(item["sizes_data"][sz]["rate"] or 0)
+                p = safe_f(item["sizes_data"][sz].get("pieces", 0))
+                r = safe_f(item["sizes_data"][sz].get("rate", 0))
                 amt = p * r
-                item["sizes_data"][sz]["amount"] = str(round(amt, 2))
+                item["sizes_data"][sz]["amount"] = f"{amt:.2f}"
                 base_sum += amt
                 total_pcs += p
             try:
-                item["total_units"] = str(int(sum(float(item["sizes_data"][s]["pieces"] or 0) for s in item["sizes_data"])))
-                item["total_boxes"] = str(int(float(item["total_units"]) / float(item["packing"] or 1)))
-                total_boxes += float(item["total_boxes"])
+                item["total_units"] = str(int(sum(safe_f(item["sizes_data"][s].get("pieces", 0)) for s in item["sizes_data"])))
+                pack = safe_f(item.get("packing") or 1)
+                item["total_boxes"] = f"{(safe_f(item['total_units']) / pack):.2f}" if pack > 0 else "0"
+                total_boxes += safe_f(item["total_boxes"])
             except: pass
 
-            
         self._val_total_pcs = total_pcs
         self._val_total_boxes = total_boxes
         self._val_taxable = base_sum
 
         self.no_of_items_lbl.value = f"{len(self.order_items)}"
         self.total_pcs.value   = f"{int(total_pcs)}"
-        self.total_boxes.value = f"{total_boxes}"
+        self.total_boxes.value = f"{total_boxes:.2f}" if isinstance(total_boxes, float) else f"{total_boxes}"
         self.total_units.value = f"{int(total_pcs)}"
         self.taxable_value.value = f"₹{base_sum:.2f}"
 
         # Calculate Discount
         current_amount = base_sum
-        dp = float(self.discount_percent.value or 0)
+        dp = safe_f(self.discount_percent.value)
         da = current_amount * (dp / 100)
         current_amount -= da
         self.discount_amount_lbl.value = f"Amt: ₹{da:.2f}"
@@ -1007,8 +1037,8 @@ class OrderEntryTab(ft.Column):
         tax_type = str(self.tax_type_dd.value or "GST").upper()
         
         if tax_type == "GST":
-            cgst_p = float(self.cgst_rate_tf.value or 0)
-            sgst_p = float(self.sgst_rate_tf.value or 0)
+            cgst_p = safe_f(self.cgst_rate_tf.value)
+            sgst_p = safe_f(self.sgst_rate_tf.value)
             
             cgst_amt = discounted_taxable * (cgst_p / 100)
             sgst_amt = discounted_taxable * (sgst_p / 100)
@@ -1020,7 +1050,7 @@ class OrderEntryTab(ft.Column):
             tax_amt = cgst_amt + sgst_amt
             self.gst_amount.value = f"GST: ₹{tax_amt:.2f}"
         else:
-            igst_p = float(self.igst_rate_tf.value or 0)
+            igst_p = safe_f(self.igst_rate_tf.value)
             igst_amt = discounted_taxable * (igst_p / 100)
             
             self.igst_amt_lbl.value = f"₹{igst_amt:.2f}"
@@ -1030,11 +1060,11 @@ class OrderEntryTab(ft.Column):
             tax_amt = igst_amt
             self.gst_amount.value = f"IGST: ₹{tax_amt:.2f}"
 
-        cess_p = float(self.cess_rate_tf.value or 0)
+        cess_p = safe_f(self.cess_rate_tf.value)
         cess_amt = discounted_taxable * (cess_p / 100)
         self.cess_amt_lbl.value = f"₹{cess_amt:.2f}"
 
-        tcs_p = float(self.tcs_rate_tf.value or 0)
+        tcs_p = safe_f(self.tcs_rate_tf.value)
         tcs_amt = discounted_taxable * (tcs_p / 100)
         self.tcs_amt_lbl.value = f"₹{tcs_amt:.2f}"
         
@@ -1042,10 +1072,7 @@ class OrderEntryTab(ft.Column):
         grand_total = discounted_taxable + tax_amt + cess_amt + tcs_amt
         
         if trigger == self.round_off:
-            try:
-                diff = float(self.round_off.value or 0)
-            except ValueError:
-                diff = 0.0
+            diff = safe_f(self.round_off.value)
             rounded = round(grand_total + diff, 2)
         else:
             rounded = math.ceil(grand_total)
@@ -1054,10 +1081,28 @@ class OrderEntryTab(ft.Column):
 
         self._val_round_off = diff
         self._val_net_amount = rounded
-        self.gross_amount.value = f"Total: ₹{rounded:.2f}"
+        self.gross_amount.value = f"₹{rounded:.2f}"
         
         if self.page:
-            self.update()
+            try:
+                self.no_of_items_lbl.update()
+                self.total_pcs.update()
+                self.total_boxes.update()
+                self.total_units.update()
+                self.taxable_value.update()
+                self.discount_amount_lbl.update()
+                self.cgst_amt_lbl.update()
+                self.sgst_amt_lbl.update()
+                self.igst_amt_lbl.update()
+                self.cess_amt_lbl.update()
+                self.tcs_amt_lbl.update()
+                self.gst_amount.update()
+                self.gross_amount.update()
+                self.round_off.update()
+            except Exception:
+                try: self.page.update()
+                except: pass
+
 
 
     def save_order(self, e):
@@ -1194,32 +1239,82 @@ class OrderEntryTab(ft.Column):
                         insert("order_items", item_dict)
                         local_order_items.append(item_dict)
 
-            # Generate PDF using in-memory data
+            self.page.snack_bar = ft.SnackBar(ft.Text("✅ Tax Invoice Saved Successfully!"), bgcolor="green")
+            self.page.snack_bar.open = True
+            self.clear_form(None)
+
+        except Exception as ex:
+            self.page.snack_bar = ft.SnackBar(ft.Text(f"Error: {ex}"), bgcolor="red")
+            self.page.snack_bar.open = True
+            self.page.update()
+
+    def print_current_invoice(self, e):
+        if not self.party_dd.value or not self.order_items:
+            self.page.snack_bar = ft.SnackBar(ft.Text("Please select Party and add items to print!"), bgcolor="red")
+            self.page.snack_bar.open = True
+            self.page.update()
+            return
+
+        def safe_float(ctrl, default=0):
+            val = str(ctrl.value or "")
+            if "₹" in val:
+                try: return float(val.split("₹")[1].replace(",", ""))
+                except: return default
+            elif any(c.isdigit() for c in val):
+                try: return float(''.join(c for c in val if c.isdigit() or c == '.'))
+                except: return default
+            return default
+
+        try:
             def get_dd_text(dd):
                 if not getattr(dd, 'value', None): return ""
                 for opt in getattr(dd, 'options', []):
                     if str(opt.key) == str(dd.value): return opt.text
                 return ""
 
-            order_data = dict(header)
-            order_data["id"] = order_id
-            order_data["party_name"] = get_dd_text(self.party_dd)
-            order_data["agent_name"] = get_dd_text(self.agent_dd)
-            order_data["transporter_name"] = get_dd_text(self.transporter_dd)
-
+            order_data = {
+                "order_no": self.order_no.value or "DRAFT",
+                "order_date": self.order_date.value,
+                "party_id": self.party_dd.value,
+                "party_name": get_dd_text(self.party_dd),
+                "agent_name": get_dd_text(self.agent_dd),
+                "transporter_name": get_dd_text(self.transporter_dd),
+                "destination": self.destination.value,
+                "remarks": self.remarks.value,
+                "no_of_cases": int(self.no_of_cases.value or 0),
+                "discount_percent": float(self.discount_percent.value or 0),
+                "tax_type": self.tax_type_dd.value,
+                "tax_per": float(self.gst_rate_tf.value or 0),
+                "cgst_amount": safe_float(self.cgst_amt_lbl),
+                "sgst_amount": safe_float(self.sgst_amt_lbl),
+                "igst_amount": safe_float(self.igst_amt_lbl),
+                "total_amount": safe_float(self.taxable_value),
+                "round_off": float(self.round_off.value or 0),
+                "net_amount": safe_float(self.gross_amount),
+            }
             order_data = self._enrich_order_data_for_pdf(order_data)
+
+            local_order_items = []
+            for item in self.order_items:
+                if not item["item_id"]: continue
+                for sz, sz_data in item["sizes_data"].items():
+                    pcs = float(sz_data["pieces"] or 0)
+                    if pcs > 0:
+                        rate = float(sz_data["rate"] or 0)
+                        local_order_items.append({
+                            "item_name": item["item_name"],
+                            "size_value": sz,
+                            "qty_pieces": pcs,
+                            "rate": rate,
+                            "amount": pcs * rate
+                        })
 
             comp_data = select("companies", {"id": state.company_id})
             company = comp_data[0] if comp_data else {}
             pdf_path = pdf_engine.generate_order(order_data, local_order_items, company)
             print_pdf(pdf_path)
-
-            self.page.snack_bar = ft.SnackBar(ft.Text("✅ Order Saved Successfully & PDF Generated!"), bgcolor="green")
-            self.page.snack_bar.open = True
-            self.clear_form(None)
-
         except Exception as ex:
-            self.page.snack_bar = ft.SnackBar(ft.Text(f"Error: {ex}"), bgcolor="red")
+            self.page.snack_bar = ft.SnackBar(ft.Text(f"Print Error: {ex}"), bgcolor="red")
             self.page.snack_bar.open = True
             self.page.update()
 
@@ -1256,54 +1351,96 @@ class OrderEntryTab(ft.Column):
     # ─────────────────────────────────────────────────────────
     def show_history_modal(self, e):
         orders = select("orders", {"company_id": state.company_id})
-        # Sort by created_at DESC (latest first)
-        orders.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        orders.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
         
         parties = select("parties", {"company_id": state.company_id})
         party_map = {str(p["id"]): p["name"] for p in parties}
-        
-        lv = ft.ListView(expand=1, spacing=10, padding=20)
+
+        # Cache items per order for fast search
+        order_items_map = {}
         for ord in orders:
+            ord_id = str(ord["id"])
             p_name = party_map.get(str(ord.get("party_id")), "Unknown")
             ord["party_name"] = p_name
-            
-            lv.controls.append(
-                ft.Container(
-                    padding=10,
-                    bgcolor=ft.colors.WHITE,
-                    border_radius=8,
-                    border=ft.border.all(1, "#E2E8F0"),
-                    content=ft.Row([
-                        ft.Column([
-                            ft.Text(f"{ord.get('order_no')}", weight="bold", size=14),
+            items = select("order_items", {"order_id": ord_id})
+            order_items_map[ord_id] = [str(it.get("item_name", "")).lower() for it in items]
+
+        lv = ft.ListView(expand=True, spacing=10, padding=10)
+
+        def build_list(search_query=""):
+            lv.controls.clear()
+            q = search_query.strip().lower()
+            filtered = []
+            for ord in orders:
+                ord_id = str(ord["id"])
+                ord_no = str(ord.get("order_no", "")).lower()
+                p_name = str(ord.get("party_name", "")).lower()
+                o_date = str(ord.get("order_date", "")).lower()
+                item_names = order_items_map.get(ord_id, [])
+
+                if not q or (q in ord_no or q in p_name or q in o_date or any(q in item for item in item_names)):
+                    filtered.append(ord)
+
+            if not filtered:
+                lv.controls.append(ft.Container(content=ft.Text("No Tax Invoices found matching search.", color=AppColors.TEXT_MUTED), padding=20))
+
+            for ord in filtered:
+                lv.controls.append(
+                    ft.Container(
+                        padding=12,
+                        bgcolor=ft.colors.WHITE,
+                        border_radius=8,
+                        border=ft.border.all(1, "#E2E8F0"),
+                        shadow=ft.BoxShadow(blur_radius=4, color="#0A000000"),
+                        content=ft.Row([
+                            ft.Column([
+                                ft.Row([
+                                    ft.Text(f"Inv #{ord.get('order_no')}", weight="bold", size=14, color=AppColors.TEXT_HEADER),
+                                    ft.Text(f"({ord.get('status', 'Pending')})", size=11, color=AppColors.TEXT_MUTED),
+                                ], spacing=6),
+                                ft.Row([
+                                    ft.Icon(ft.icons.CALENDAR_TODAY, size=12, color=ft.colors.BLUE_GREY_400),
+                                    ft.Text(f"{ord.get('order_date')}", size=11, color=ft.colors.BLUE_GREY_600),
+                                    ft.VerticalDivider(width=10),
+                                    ft.Icon(ft.icons.ACCESS_TIME, size=12, color=ft.colors.BLUE_GREY_400),
+                                    ft.Text(self._format_timestamp(ord.get('created_at')), size=11, color=ft.colors.BLUE_GREY_600),
+                                ], spacing=5),
+                                ft.Text(ord.get('party_name', '-'), size=13, weight="w500", color=AppColors.PRIMARY),
+                            ], expand=True, spacing=4),
+                            ft.Column([
+                                ft.Text(f"Pcs: {int(ord.get('total_pcs', 0))}", size=12, weight="bold"),
+                                ft.Text(f"₹ {float(ord.get('net_amount', 0)):,.2f}", size=16, weight="bold", color=ft.colors.GREEN_700),
+                            ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=2),
                             ft.Row([
-                                ft.Icon(ft.icons.CALENDAR_TODAY, size=12, color=ft.colors.BLUE_GREY_400),
-                                ft.Text(f"{ord.get('order_date')}", size=11, color=ft.colors.BLUE_GREY_600),
-                                ft.VerticalDivider(width=10),
-                                ft.Icon(ft.icons.ACCESS_TIME, size=12, color=ft.colors.BLUE_GREY_400),
-                                ft.Text(self._format_timestamp(ord.get('created_at')), size=11, color=ft.colors.BLUE_GREY_600),
-                            ], spacing=5),
-                            ft.Text(p_name, size=13, weight="w500", color=AppColors.PRIMARY),
-                        ], expand=True, spacing=4),
-                        ft.Column([
-                            ft.Text(f"Pcs: {int(ord.get('total_pcs', 0))}", size=12, weight="bold"),
-                            ft.Text(f"₹ {float(ord.get('net_amount', 0)):,.2f}", size=16, weight="bold", color=ft.colors.GREEN_700),
-                        ], horizontal_alignment=ft.CrossAxisAlignment.END, spacing=2),
-                        ft.Row([
-                            ft.IconButton(ft.icons.EDIT_OUTLINED, tooltip="Edit Order", icon_color=AppColors.PRIMARY, 
-                                          on_click=lambda e, o=ord: self.load_order_for_edit(o, dlg)),
-                            ft.IconButton(ft.icons.PRINT, tooltip="Print Order", icon_color=ft.colors.BLUE_700, 
-                                          on_click=lambda e, o=ord: self.print_history_order(o)),
-                            ft.IconButton(ft.icons.DELETE_OUTLINE, tooltip="Delete Order", icon_color="red",
-                                          on_click=lambda e, o=ord: self.delete_order_from_history(o, dlg))
+                                ft.IconButton(ft.icons.EDIT_OUTLINED, tooltip="Edit Invoice", icon_color=AppColors.PRIMARY, 
+                                              on_click=lambda e, o=ord: self.load_order_for_edit(o, dlg)),
+                                ft.IconButton(ft.icons.PRINT, tooltip="Print Invoice", icon_color=ft.colors.BLUE_700, 
+                                              on_click=lambda e, o=ord: self.print_history_order(o)),
+                                ft.IconButton(ft.icons.DELETE_OUTLINE, tooltip="Delete Invoice", icon_color="red",
+                                              on_click=lambda e, o=ord: self.delete_order_from_history(o, dlg))
+                            ], spacing=4)
                         ])
-                    ])
+                    )
                 )
-            )
-            
+
+        build_list("")
+
+        search_input = ft.TextField(
+            hint_text="Search Invoice No / Party / Item / Date...",
+            prefix_icon=ft.icons.SEARCH,
+            width=580,
+            on_change=lambda e: (build_list(e.control.value), dlg.update()),
+            **AppStyles.get_input_style()
+        )
+
+        modal_body = ft.Column([
+            search_input,
+            ft.Container(height=400, width=600, content=lv)
+        ], spacing=10)
+
         dlg = ft.AlertDialog(
-            title=ft.Text("Recent Orders"),
-            content=ft.Container(width=600, height=400, content=lv),
+            title=ft.Text("Tax Invoice History"),
+            content=modal_body,
             actions=[ft.TextButton("Close", on_click=lambda e: self._close_dialog(dlg))]
         )
         self.page.overlay.append(dlg)

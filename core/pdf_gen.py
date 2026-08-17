@@ -782,7 +782,7 @@ class PDFGenerator:
     def generate_knitting_program(self, prog_header, items, company_data={}):
         filename = f"Knitting_{prog_header.get('prog_no', 'TEMP')}.pdf"
         filepath = os.path.join(self.output_dir, filename)
-        doc = SimpleDocTemplate(filepath, pagesize=A4, leftMargin=0.5*inch, rightMargin=0.5*inch)
+        doc = SimpleDocTemplate(filepath, pagesize=A4, leftMargin=0.5*inch, rightMargin=0.5*inch, topMargin=0.5*inch, bottomMargin=0.5*inch)
         elements = []
 
         elements.extend(self._get_company_header(company_data))
@@ -805,12 +805,17 @@ class PDFGenerator:
                 str(it.get('weight') or ''), str(it.get('rolls') or '')
             ])
             
-        t = Table(data, colWidths=[0.3*inch, 1.5*inch, 1.5*inch, 0.7*inch, 0.5*inch, 0.5*inch, 1.0*inch, 0.8*inch])
+        for _ in range(10 - min(10, len(items))):
+            data.append(["", "", "", "", "", "", "", ""])
+
+        t = Table(data, colWidths=[0.4*inch, 1.6*inch, 1.6*inch, 0.8*inch, 0.6*inch, 0.6*inch, 1.0*inch, 0.67*inch])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.whitesmoke),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('ALIGN', (3, 1), (-1, -1), 'CENTER'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
         ]))
         elements.append(t)
         elements.append(Spacer(1, 0.3 * inch))
@@ -825,7 +830,7 @@ class PDFGenerator:
     def generate_dyeing_program(self, prog_header, items, company_data={}):
         filename = f"Dyeing_{prog_header.get('prog_no', 'TEMP')}.pdf"
         filepath = os.path.join(self.output_dir, filename)
-        doc = SimpleDocTemplate(filepath, pagesize=A4, leftMargin=0.5*inch, rightMargin=0.5*inch)
+        doc = SimpleDocTemplate(filepath, pagesize=A4, leftMargin=0.5*inch, rightMargin=0.5*inch, topMargin=0.5*inch, bottomMargin=0.5*inch)
         elements = []
 
         elements.extend(self._get_company_header(company_data))
@@ -840,19 +845,24 @@ class PDFGenerator:
         elements.append(t)
         elements.append(Spacer(1, 0.2 * inch))
 
-        data = [["Sl", "Item", "Colour", "Process", "Weight (Kgs)", "Batch"]]
+        data = [["Sl", "Item", "Colour", "Process", "Dia", "Weight (Kgs)", "Batch"]]
         for i, it in enumerate(items, 1):
             data.append([
                 str(i), str(it.get('item_name') or ''), str(it.get("colour") or ''),
-                str(it.get('process') or ''), str(it.get('weight') or ''), str(it.get('batch') or '')
+                str(it.get('process') or ''), str(it.get('dia') or ''), str(it.get('weight') or ''), str(it.get('batch') or '')
             ])
             
-        t = Table(data, colWidths=[0.5*inch, 2.0*inch, 1.5*inch, 1.5*inch, 1.0*inch, 0.77*inch])
+        for _ in range(10 - min(10, len(items))):
+            data.append(["", "", "", "", "", "", ""])
+
+        t = Table(data, colWidths=[0.4*inch, 1.8*inch, 1.3*inch, 1.3*inch, 0.7*inch, 1.0*inch, 0.77*inch])
         t.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.whitesmoke),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('ALIGN', (4, 1), (-1, -1), 'CENTER'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
         ]))
         elements.append(t)
         elements.append(Spacer(1, 0.3 * inch))
